@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 15 npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(timeout 20 npm run:*)",
+      "Bash(PORT=5001 timeout 20 npm run:*)",
+      "Bash(timeout 10 npm run:*)",
+      "Bash(node:*)",
+      "Bash(cp:*)",
+      "Bash(curl:*)",
+      "Bash(npm uninstall:*)"
+    ]
+  }
+}
