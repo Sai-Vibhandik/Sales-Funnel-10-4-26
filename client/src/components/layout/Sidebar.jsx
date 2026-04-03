@@ -131,27 +131,68 @@ export default function ({ collapsed, setCollapsed }) {
   const homeLink = role === 'platform_admin' ? '/platform-admin' : '/dashboard';
 
   // Helper to check if nav item is active
-  const isNavItemActive = (item) => {
-    const itemUrl = new URL(item.href, 'http://localhost');
-    const itemPath = itemUrl.pathname;
-    const itemTab = itemUrl.searchParams.get('tab');
+  // const isNavItemActive = (item) => {
+  //   const itemUrl = new URL(item.href, 'http://localhost');
+  //   const itemPath = itemUrl.pathname;
+  //   const itemTab = itemUrl.searchParams.get('tab');
 
-    // For platform admin pages, also check the tab param
-    if (itemPath === '/platform-admin' && itemTab) {
-      const currentTab = searchParams.get('tab');
-      return location.pathname === itemPath && currentTab === itemTab;
+  //   // For platform admin pages, also check the tab param
+  //   if (itemPath === '/platform-admin' && itemTab) {
+  //     const currentTab = searchParams.get('tab');
+  //     return location.pathname === itemPath && currentTab === itemTab;
+  //   }
+
+  //   // For dashboard routes
+  //   if (itemPath === '/dashboard') {
+  //     return location.pathname === '/dashboard';
+  //   }
+
+  //   // Check if pathname matches (for other routes)
+  //   return location.pathname === itemPath ||
+  //     (itemPath !== '/dashboard' && location.pathname.startsWith(itemPath));
+  // };
+// Fix 1: correct the path check
+// const isNavItemActive = (item) => {
+//   const itemUrl = new URL(item.href, 'http://localhost');
+//   const itemPath = itemUrl.pathname;
+//   const itemTab = itemUrl.searchParams.get('tab');
+
+//   // ✅ Fix: match the actual path used in navigationByRole
+//   if (itemPath === '/dashboard/platform-admin' && itemTab) {
+//     const currentTab = searchParams.get('tab');
+//     return location.pathname === itemPath && currentTab === itemTab;
+//   }
+
+//   if (itemPath === '/dashboard') {
+//     return location.pathname === '/dashboard';
+//   }
+
+//   return location.pathname === itemPath ||
+//     (itemPath !== '/dashboard' && location.pathname.startsWith(itemPath));
+// };
+const isNavItemActive = (item) => {
+  const itemUrl = new URL(item.href, 'http://localhost');
+  const itemPath = itemUrl.pathname;
+  const itemTab = itemUrl.searchParams.get('tab');
+
+  if (itemPath === '/dashboard/platform-admin' && itemTab) {
+    const currentTab = searchParams.get('tab');
+
+    // ✅ If no tab in URL, default to 'overview' (Dashboard item)
+    if (!currentTab) {
+      return itemTab === 'overview';
     }
 
-    // For dashboard routes
-    if (itemPath === '/dashboard') {
-      return location.pathname === '/dashboard';
-    }
+    return location.pathname === itemPath && currentTab === itemTab;
+  }
 
-    // Check if pathname matches (for other routes)
-    return location.pathname === itemPath ||
-      (itemPath !== '/dashboard' && location.pathname.startsWith(itemPath));
-  };
+  if (itemPath === '/dashboard') {
+    return location.pathname === '/dashboard';
+  }
 
+  return location.pathname === itemPath ||
+    (itemPath !== '/dashboard' && location.pathname.startsWith(itemPath));
+};
   return (
     <aside
       className={cn(
@@ -187,31 +228,37 @@ export default function ({ collapsed, setCollapsed }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 dark-">
-        <ul className="space-y-1">
-          {navigation.map((item) => {
-            const isActive = isNavItemActive(item);
-            return (
-              <li key={item.name}>
-                <Link
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                    isActive
-                      ? 'bg-primary-500/10 text-primary-500 border-l-2 border-primary-500'
-                      : 'text-gray-400 hover:bg-dark-200 hover:text-white',
-                    collapsed && 'justify-center'
-                  )}
-                  title={collapsed ? item.name : undefined}
-                >
-                  <item.icon size={20} className={cn(isActive && 'text-primary-500')} />
-                  {!collapsed && <span>{item.name}</span>}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+    <nav className="flex-1 overflow-y-auto py-4 px-3">
+  <ul className="space-y-1">
+    {navigation.map((item) => {
+      const isActive = isNavItemActive(item);
+      return (
+        <li key={item.name}>
+          <Link
+            to={item.href}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+              isActive
+                ? 'bg-dark-200 text-primary-500 border-l-2 border-primary-500'
+                : 'text-gray-400 hover:bg-dark-200 hover:text-white-500',
+              collapsed && 'justify-center'
+            )}
+            title={collapsed ? item.name : undefined}
+          >
+            <item.icon
+              size={20}
+              className={cn(
+                'transition-colors duration-200',
+                isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-primary-500'
+              )}
+            />
+            {!collapsed && <span>{item.name}</span>}
+          </Link>
+        </li>
+      );
+    })}
+  </ul>
+</nav>
 
       {/* User section */}
       <div className="border-t border-dark-200 p-4">

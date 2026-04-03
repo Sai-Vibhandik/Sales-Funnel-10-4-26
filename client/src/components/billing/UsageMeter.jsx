@@ -180,12 +180,12 @@ export function UsageSummary({ usage, planLimits }) {
       limit: planLimits?.storageLimitMB || -1,
       label: 'Storage'
     },
-    {
-      type: 'aiCalls',
-      used: usage?.aiCallsThisMonth || 0,
-      limit: planLimits?.aiCallsPerMonth || -1,
-      label: 'AI Calls'
-    }
+    // {
+    //   type: 'aiCalls',
+    //   used: usage?.aiCallsThisMonth || 0,
+    //   limit: planLimits?.aiCallsPerMonth || -1,
+    //   label: 'AI Calls'
+    // }
   ];
 
   return (

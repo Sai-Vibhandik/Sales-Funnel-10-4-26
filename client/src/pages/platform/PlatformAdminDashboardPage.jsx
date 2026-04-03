@@ -74,6 +74,19 @@ const ROLE_COLORS = {
   content_creator: 'bg-yellow-100 text-yellow-700',
 };
 
+// Role display names mapping
+const ROLE_DISPLAY_NAMES = {
+  admin: 'Admin',
+  platform_admin: 'Platform Admin',
+  performance_marketer: 'Performance Marketer',
+  content_writer: 'Content Planner',
+  graphic_designer: 'Graphic Designer',
+  video_editor: 'Video Editor',
+  ui_ux_designer: 'UI/UX Designer',
+  developer: 'Developer',
+  tester: 'Tester',
+};
+
 // Plan colors - based on plan name keywords
 const PLAN_COLOR_KEYWORDS = [
   { keyword: 'free', color: 'bg-gray-100 text-gray-700' },
@@ -92,6 +105,11 @@ const getPlanColor = (planName) => {
   const lowerName = planName.toLowerCase();
   const match = PLAN_COLOR_KEYWORDS.find(p => lowerName.includes(p.keyword));
   return match ? match.color : 'bg-gray-100 text-gray-700';
+};
+
+// Shared helper to get plan display name from org object
+const getPlanName = (org) => {
+  return org?.planName || org?.plan || 'Free';
 };
 
 // Chart colors
@@ -151,19 +169,6 @@ function StatCard({ title, value, subtitle, icon: Icon, iconBg }) {
   );
 }
 
-// Role display names mapping
-const ROLE_DISPLAY_NAMES = {
-  admin: 'Admin',
-  platform_admin: 'Platform Admin',
-  performance_marketer: 'Performance Marketer',
-  content_writer: 'Content Planner',
-  graphic_designer: 'Graphic Designer',
-  video_editor: 'Video Editor',
-  ui_ux_designer: 'UI/UX Designer',
-  developer: 'Developer',
-  tester: 'Tester',
-};
-
 // Overview Tab with Charts
 function OverviewTab({ stats, loading, plans }) {
   if (loading) return <Spinner size="lg" className="mx-auto mt-8" />;
@@ -171,27 +176,18 @@ function OverviewTab({ stats, loading, plans }) {
   // Map plan value to display name using plans data
   const planNameToDisplay = (planValue) => {
     if (!planValue) return 'Free';
-
-    // Normalize common variations
     const normalizedValue = planValue.toLowerCase().trim();
-
-    // Handle "Free Plan", "Free", "free plan", etc. - all map to "Free"
     if (normalizedValue === 'free' || normalizedValue === 'free plan' || normalizedValue === 'freeplan') {
       return 'Free';
     }
-
-    // Try to find matching plan by name or displayName (case-insensitive)
     const matchingPlan = plans?.find(p =>
       p.name?.toLowerCase() === normalizedValue ||
       p.displayName?.toLowerCase() === normalizedValue ||
       p._id?.toString() === planValue
     );
-
     if (matchingPlan) {
       return matchingPlan.displayName || matchingPlan.name;
     }
-
-    // Handle legacy tier values (without "Plan" suffix)
     const legacyMapping = {
       'starter': 'Starter',
       'pro': 'Pro',
@@ -200,33 +196,22 @@ function OverviewTab({ stats, loading, plans }) {
       'scale': 'Scale',
       'grand': 'Grand'
     };
-
-    // Remove "Plan" suffix if present (e.g., "Starter Plan" -> "Starter")
     const withoutPlanSuffix = normalizedValue.replace(/\s*plan$/i, '');
-
     if (legacyMapping[withoutPlanSuffix]) {
       return legacyMapping[withoutPlanSuffix];
     }
-
-    // Capitalize as fallback (remove "Plan" suffix first)
     const cleanValue = planValue.replace(/\s*plan$/i, '');
     return cleanValue.charAt(0).toUpperCase() + cleanValue.slice(1).toLowerCase();
   };
 
-  // Get valid plan names from database for comparison
-  const validPlanNames = (plans || []).map(p => (p.name || '').toLowerCase());
-
-  // Generate chart colors dynamically based on plan name
   const getPlanChartColor = (planName, index) => {
     const colors = ['#6B7280', '#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#06B6D4', '#6366F1', '#EC4899'];
     if (!planName) return colors[0];
-    // Use index if provided, otherwise hash the plan name
     if (index !== undefined) return colors[index % colors.length];
     const hash = planName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
   };
 
-  // Prepare chart data and merge plans with same display names
   const planDataMap = {};
   Object.entries(stats?.organizationsByPlan || {}).forEach(([plan, count]) => {
     const displayName = planNameToDisplay(plan);
@@ -238,23 +223,21 @@ function OverviewTab({ stats, loading, plans }) {
   });
 
   const orgsByPlanData = Object.entries(planDataMap)
-    .sort((a, b) => b[1] - a[1]) // Sort by count descending
+    .sort((a, b) => b[1] - a[1])
     .map(([name, count], index) => ({
       name,
       value: count,
       color: getPlanChartColor(name, index),
     }));
 
-  // Prepare chart data - exclude platform_admin from role chart
   const usersByRoleData = Object.entries(stats?.usersByRole || {})
-    .filter(([role]) => role !== 'platform_admin') // Exclude platform_admin
+    .filter(([role]) => role !== 'platform_admin')
     .map(([role, count], index) => ({
       name: ROLE_DISPLAY_NAMES[role] || role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
       value: count,
       color: ROLE_CHART_COLORS[index % ROLE_CHART_COLORS.length],
     }));
 
-  // Summary stats for mini cards
   const totalUsers = stats?.totalUsers || 0;
   const totalOrgs = stats?.totalOrganizations || 0;
   const activeUsers = stats?.activeUsers || 0;
@@ -262,40 +245,14 @@ function OverviewTab({ stats, loading, plans }) {
 
   return (
     <div className="space-y-6">
-      {/* Compact Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Users"
-          value={totalUsers}
-          subtitle={`${activeUsers} active`}
-          icon={Users}
-          iconBg="bg-gradient-to-br from-blue-500 to-blue-600"
-        />
-        <StatCard
-          title="Organizations"
-          value={totalOrgs}
-          icon={Building2}
-          iconBg="bg-gradient-to-br from-purple-500 to-purple-600"
-        />
-        <StatCard
-          title="Weekly Activity"
-          value={activity}
-          subtitle="actions logged"
-          icon={Activity}
-          iconBg="bg-gradient-to-br from-green-500 to-green-600"
-        />
-        <StatCard
-          title="Platform Health"
-          value="98%"
-          subtitle="uptime"
-          icon={Shield}
-          iconBg="bg-gradient-to-br from-emerald-500 to-emerald-600"
-        />
+        <StatCard title="Total Users" value={totalUsers} subtitle={`${activeUsers} active`} icon={Users} iconBg="bg-gradient-to-br from-blue-500 to-blue-600" />
+        <StatCard title="Organizations" value={totalOrgs} icon={Building2} iconBg="bg-gradient-to-br from-purple-500 to-purple-600" />
+        <StatCard title="Weekly Activity" value={activity} subtitle="actions logged" icon={Activity} iconBg="bg-gradient-to-br from-green-500 to-green-600" />
+        <StatCard title="Platform Health" value="98%" subtitle="uptime" icon={Shield} iconBg="bg-gradient-to-br from-emerald-500 to-emerald-600" />
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Users by Role - Pie Chart */}
         <Card>
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -309,21 +266,12 @@ function OverviewTab({ stats, loading, plans }) {
                 </div>
               </div>
             </div>
-
             {usersByRoleData.length > 0 ? (
               <>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={usersByRoleData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
+                      <Pie data={usersByRoleData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value">
                         {usersByRoleData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -353,7 +301,6 @@ function OverviewTab({ stats, loading, plans }) {
           </CardBody>
         </Card>
 
-        {/* Organizations by Plan - Bar Chart */}
         <Card>
           <CardBody className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -367,7 +314,6 @@ function OverviewTab({ stats, loading, plans }) {
                 </div>
               </div>
             </div>
-
             {orgsByPlanData.length > 0 ? (
               <>
                 <div className="h-64">
@@ -375,15 +321,7 @@ function OverviewTab({ stats, loading, plans }) {
                     <BarChart data={orgsByPlanData} layout="vertical" barSize={32}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={true} vertical={false} />
                       <XAxis type="number" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        stroke="#9CA3AF"
-                        fontSize={11}
-                        axisLine={false}
-                        tickLine={false}
-                        width={80}
-                      />
+                      <YAxis type="category" dataKey="name" stroke="#9CA3AF" fontSize={11} axisLine={false} tickLine={false} width={80} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                         {orgsByPlanData.map((entry, index) => (
@@ -415,7 +353,6 @@ function OverviewTab({ stats, loading, plans }) {
         </Card>
       </div>
 
-      {/* Additional Stats Row */}
       <Card>
         <CardBody className="p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -427,7 +364,6 @@ function OverviewTab({ stats, loading, plans }) {
               <p className="text-sm text-gray-500">Key metrics at a glance</p>
             </div>
           </div>
-
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
               <div className="flex items-center gap-2 mb-2">
@@ -437,18 +373,14 @@ function OverviewTab({ stats, loading, plans }) {
               <p className="text-2xl font-bold text-blue-900">{totalUsers}</p>
               <p className="text-xs text-blue-600 mt-1">{activeUsers} active</p>
             </div>
-
             <div className="p-4 rounded-xl bg-purple-50 border border-purple-100">
               <div className="flex items-center gap-2 mb-2">
                 <Building2 size={16} className="text-purple-600" />
                 <span className="text-sm text-purple-700">Organizations</span>
               </div>
               <p className="text-2xl font-bold text-purple-900">{totalOrgs}</p>
-              <p className="text-xs text-purple-600 mt-1">
-                {orgsByPlanData.reduce((sum, item) => sum + item.value, 0)} total
-              </p>
+              <p className="text-xs text-purple-600 mt-1">{orgsByPlanData.reduce((sum, item) => sum + item.value, 0)} total</p>
             </div>
-
             <div className="p-4 rounded-xl bg-green-50 border border-green-100">
               <div className="flex items-center gap-2 mb-2">
                 <Activity size={16} className="text-green-600" />
@@ -457,7 +389,6 @@ function OverviewTab({ stats, loading, plans }) {
               <p className="text-2xl font-bold text-green-900">{activity}</p>
               <p className="text-xs text-green-600 mt-1">actions logged</p>
             </div>
-
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-100">
               <div className="flex items-center gap-2 mb-2">
                 <Shield size={16} className="text-amber-600" />
@@ -484,7 +415,11 @@ function OrganizationsTab() {
   const [suspendReason, setSuspendReason] = useState('');
   const [plans, setPlans] = useState([]);
 
-  // Fetch plans for filter
+  // --- NEW: state for members in the detail modal ---
+  const [orgMembers, setOrgMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+
+  // Fetch plans for filter dropdown
   useEffect(() => {
     const fetchPlans = async () => {
       try {
@@ -496,12 +431,6 @@ function OrganizationsTab() {
     };
     fetchPlans();
   }, []);
-
-  // Helper to get plan name - use planName or plan field
-  const getPlanName = (org) => {
-    // planName is the preferred field, plan might have older values
-    return org?.planName || org?.plan || 'Free';
-  };
 
   const fetchOrganizations = async () => {
     try {
@@ -521,6 +450,39 @@ function OrganizationsTab() {
   useEffect(() => {
     fetchOrganizations();
   }, [search, planFilter]);
+
+  // --- NEW: fetch members when an org is selected ---
+  const handleViewOrg = async (org) => {
+    setSelectedOrg(org);
+    setOrgMembers([]);
+    setMembersLoading(true);
+    try {
+      const orgIdStr = String(org._id);
+
+      // Fetch all users grouped by org, then find the matching group
+      const response = await platformAdminService.getUsers({ groupByOrg: true });
+      const data = response.data || [];
+
+      if (Array.isArray(data) && data.length > 0 && data[0]?.members !== undefined) {
+        // Grouped format: [{organization: {...}, members: [...]}]
+        const group = data.find(g => String(g.organization?._id) === orgIdStr);
+        setOrgMembers(group?.members || []);
+      } else if (Array.isArray(data)) {
+        // Flat format: filter by org
+        const filtered = data.filter(
+          u => String(u.organizationId || u.organization?._id || u.organization) === orgIdStr
+        );
+        setOrgMembers(filtered);
+      } else {
+        setOrgMembers([]);
+      }
+    } catch (error) {
+      console.error('Failed to load members:', error);
+      toast.error('Failed to load members');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
 
   const handleSuspend = async (org, suspend = true) => {
     try {
@@ -560,9 +522,7 @@ function OrganizationsTab() {
         >
           <option value="">All Plans</option>
           {plans.map((plan) => (
-            <option key={plan._id} value={plan.name}>
-              {plan.name}
-            </option>
+            <option key={plan._id} value={plan.name}>{plan.name}</option>
           ))}
         </select>
         <Button variant="outline" onClick={fetchOrganizations}>
@@ -602,7 +562,7 @@ function OrganizationsTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <Badge className={getPlanColor(org?.plan)}>
+                    <Badge className={getPlanColor(getPlanName(org))}>
                       {getPlanName(org)}
                     </Badge>
                     <div className="text-right text-sm">
@@ -610,7 +570,8 @@ function OrganizationsTab() {
                       <p className="font-medium">{new Date(org.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedOrg(org)}>
+                      {/* --- CHANGED: onClick now calls handleViewOrg --- */}
+                      <Button variant="ghost" size="sm" onClick={() => handleViewOrg(org)}>
                         <Eye size={16} />
                       </Button>
                       {org.isActive !== false ? (
@@ -670,40 +631,133 @@ function OrganizationsTab() {
         </div>
       )}
 
-      {/* Detail Modal */}
+      {/* --- UPDATED Detail Modal with Members & Roles --- */}
       {selectedOrg && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedOrg(null)}>
-          <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => { setSelectedOrg(null); setOrgMembers([]); }}
+        >
+          <Card
+            className="max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <CardBody className="p-6">
+              {/* Modal Header */}
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">{selectedOrg.name}</h3>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedOrg(null)}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold text-lg">
+                    {selectedOrg.name?.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">{selectedOrg.name}</h3>
+                    <p className="text-sm text-gray-500">{selectedOrg.owner?.email}</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedOrg(null); setOrgMembers([]); }}>
                   <X size={18} />
                 </Button>
               </div>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Plan</p>
-                    <Badge className={getPlanColor(selectedOrg?.plan)}>
-                      {getPlanName(selectedOrg)}
-                    </Badge>
+
+              {/* Org Info Grid */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500 mb-1">Plan</p>
+                  <Badge className={getPlanColor(getPlanName(selectedOrg))}>
+                    {getPlanName(selectedOrg)}
+                  </Badge>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500 mb-1">Status</p>
+                  <Badge className={selectedOrg.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                    {selectedOrg.isActive !== false ? 'Active' : 'Suspended'}
+                  </Badge>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500 mb-1">Owner</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedOrg.owner?.name || '—'}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500 mb-1">Created</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {new Date(selectedOrg.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* --- NEW: Members & Roles Section --- */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-gray-500" />
+                    <h4 className="text-sm font-semibold text-gray-900">
+                      Members & Roles
+                    </h4>
+                    {!membersLoading && (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                        {orgMembers.length}
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Status</p>
-                    <Badge className={selectedOrg.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                      {selectedOrg.isActive !== false ? 'Active' : 'Suspended'}
-                    </Badge>
+                </div>
+
+                {membersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Spinner size="sm" />
+                    <span className="ml-2 text-sm text-gray-500">Loading members...</span>
                   </div>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Owner</p>
-                  <p className="font-medium">{selectedOrg.owner?.name} ({selectedOrg.owner?.email})</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Created</p>
-                  <p className="font-medium">{new Date(selectedOrg.createdAt).toLocaleString()}</p>
-                </div>
+                ) : orgMembers.length === 0 ? (
+                  <div className="py-8 text-center rounded-lg bg-gray-50 border border-dashed border-gray-200">
+                    <Users size={28} className="mx-auto text-gray-300 mb-2" />
+                    <p className="text-sm text-gray-400">No members found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {orgMembers.map((member) => (
+                      <div
+                        key={member._id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                            {member.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {member.name}
+                              </p>
+                              {!member.isActive && (
+                                <Badge className="bg-red-100 text-red-600 text-xs py-0">
+                                  Inactive
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 truncate">{member.email}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                          {/* Role Badge */}
+                          <Badge className={cn(
+                            'text-xs capitalize',
+                            ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'
+                          )}>
+                            {ROLE_DISPLAY_NAMES[member.role] || member.role?.replace(/_/g, ' ')}
+                          </Badge>
+                          {/* Join date */}
+                          {member.joinedAt && (
+                            <span className="text-xs text-gray-400 hidden sm:block">
+                              {new Date(member.joinedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardBody>
           </Card>
@@ -726,12 +780,6 @@ function UsersTab() {
   const [selectedRole, setSelectedRole] = useState('');
   const [plans, setPlans] = useState([]);
 
-  // Helper to get plan name - use planName or plan field
-  const getPlanName = (org) => {
-    return org?.planName || org?.plan || 'Free';
-  };
-
-  // Fetch plans
   useEffect(() => {
     const fetchPlans = async () => {
       try {
@@ -753,7 +801,6 @@ function UsersTab() {
       if (orgFilter) params.organizationId = orgFilter;
       const response = await platformAdminService.getUsers(params);
 
-      // Filter members by role if specified
       let data = response.data || [];
       if (roleFilter) {
         data = data.map(group => ({
@@ -764,7 +811,6 @@ function UsersTab() {
 
       setGroupedUsers(data);
 
-      // Auto-expand all organizations
       const expanded = {};
       data.forEach(group => {
         expanded[group.organization._id] = true;
@@ -792,7 +838,6 @@ function UsersTab() {
   }, []);
 
   useEffect(() => {
-    // Debounce search
     const timer = setTimeout(() => {
       fetchUsers();
     }, 300);
@@ -948,7 +993,7 @@ function UsersTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge className={getPlanColor(group.organization?.plan)}>
+                  <Badge className={getPlanColor(getPlanName(group.organization))}>
                     {getPlanName(group.organization)}
                   </Badge>
                   <ChevronRight
@@ -985,7 +1030,7 @@ function UsersTab() {
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge className={ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'}>
-                          {member.role?.replace(/_/g, ' ')}
+                          {ROLE_DISPLAY_NAMES[member.role] || member.role?.replace(/_/g, ' ')}
                         </Badge>
                         <span className="text-xs text-gray-400">
                           Joined {new Date(member.joinedAt).toLocaleDateString()}
@@ -1157,12 +1202,9 @@ function PlansTab() {
                         <Badge className="bg-red-100 text-red-700">Inactive</Badge>
                       )}
                     </div>
-
                     <div className="flex items-baseline gap-4 mb-3">
                       <div>
-                        <span className="text-2xl font-bold text-gray-900">
-                          ₹{plan.monthlyPrice || 0}
-                        </span>
+                        <span className="text-2xl font-bold text-gray-900">₹{plan.monthlyPrice || 0}</span>
                         <span className="text-gray-500">/month</span>
                       </div>
                       {plan.yearlyPrice > 0 && (
@@ -1172,7 +1214,6 @@ function PlansTab() {
                         </div>
                       )}
                     </div>
-
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
                         <span className="text-gray-500">Users:</span>
@@ -1192,15 +1233,14 @@ function PlansTab() {
                           {plan.limits?.maxLandingPages === -1 ? 'Unlimited' : plan.limits?.maxLandingPages || 0}
                         </span>
                       </div>
-                      <div>
+                      {/* <div>
                         <span className="text-gray-500">AI Calls:</span>
                         <span className="ml-1 font-medium">
                           {plan.limits?.aiCallsPerMonth === -1 ? 'Unlimited' : plan.limits?.aiCallsPerMonth || 0}/mo
                         </span>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => openEditModal(plan)}>
                       <Edit size={14} className="mr-1" />
@@ -1241,7 +1281,6 @@ function PlansTab() {
                     placeholder="e.g., Starter, Growth, Pro"
                   />
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Price (₹)</label>
@@ -1251,7 +1290,6 @@ function PlansTab() {
                       value={formData.monthlyPrice || 0}
                       onChange={(e) => setFormData({ ...formData, monthlyPrice: Math.max(0, parseInt(e.target.value) || 0) })}
                       className="w-full p-2 border border-gray-200 rounded-lg"
-                      placeholder="999"
                     />
                   </div>
                   <div>
@@ -1262,11 +1300,9 @@ function PlansTab() {
                       value={formData.yearlyPrice || 0}
                       onChange={(e) => setFormData({ ...formData, yearlyPrice: Math.max(0, parseInt(e.target.value) || 0) })}
                       className="w-full p-2 border border-gray-200 rounded-lg"
-                      placeholder="9999"
                     />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Max Users</label>
@@ -1274,12 +1310,8 @@ function PlansTab() {
                       type="number"
                       min="-1"
                       value={formData.limits?.maxUsers || 0}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        limits: { ...formData.limits, maxUsers: parseInt(e.target.value) || 0 }
-                      })}
+                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxUsers: parseInt(e.target.value) || 0 } })}
                       className="w-full p-2 border border-gray-200 rounded-lg"
-                      placeholder="10"
                     />
                     <p className="text-xs text-gray-500 mt-1">Enter -1 for unlimited</p>
                   </div>
@@ -1289,17 +1321,12 @@ function PlansTab() {
                       type="number"
                       min="-1"
                       value={formData.limits?.maxProjects || 0}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        limits: { ...formData.limits, maxProjects: parseInt(e.target.value) || 0 }
-                      })}
+                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxProjects: parseInt(e.target.value) || 0 } })}
                       className="w-full p-2 border border-gray-200 rounded-lg"
-                      placeholder="5"
                     />
                     <p className="text-xs text-gray-500 mt-1">Enter -1 for unlimited</p>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Max Landing Pages</label>
@@ -1307,12 +1334,8 @@ function PlansTab() {
                       type="number"
                       min="-1"
                       value={formData.limits?.maxLandingPages || 0}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        limits: { ...formData.limits, maxLandingPages: parseInt(e.target.value) || 0 }
-                      })}
+                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxLandingPages: parseInt(e.target.value) || 0 } })}
                       className="w-full p-2 border border-gray-200 rounded-lg"
-                      placeholder="10"
                     />
                   </div>
                   <div>
@@ -1321,16 +1344,11 @@ function PlansTab() {
                       type="number"
                       min="-1"
                       value={formData.limits?.aiCallsPerMonth || 0}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        limits: { ...formData.limits, aiCallsPerMonth: parseInt(e.target.value) || 0 }
-                      })}
+                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, aiCallsPerMonth: parseInt(e.target.value) || 0 } })}
                       className="w-full p-2 border border-gray-200 rounded-lg"
-                      placeholder="100"
                     />
                   </div>
                 </div>
-
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2">
                     <input
@@ -1352,7 +1370,6 @@ function PlansTab() {
                   </label>
                 </div>
               </div>
-
               <div className="flex justify-end gap-3 mt-6">
                 <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>
                   Cancel
@@ -1410,13 +1427,11 @@ function PromptsTab() {
     { value: 'MASTER', label: 'MASTER - Multi-Framework' },
   ];
 
-  // Helper function to get framework label
   const getFrameworkLabel = (framework) => {
     const option = frameworkOptions.find(f => f.value === framework);
     return option ? option.label : framework;
   };
 
-  // Toggle framework expansion
   const toggleFramework = (framework) => {
     setExpandedFrameworks(prev => ({
       ...prev,
@@ -1424,7 +1439,6 @@ function PromptsTab() {
     }));
   };
 
-  // Group content_writer prompts by framework
   const contentWriterPrompts = prompts.filter(p => p.role === 'content_writer');
   const otherRolePrompts = prompts.filter(p => p.role !== 'content_writer');
 
@@ -1433,21 +1447,15 @@ function PromptsTab() {
     .reduce((acc, prompt) => {
       const framework = prompt.frameworkType;
       if (!acc[framework]) {
-        acc[framework] = {
-          prompts: [],
-          subcategories: {}
-        };
+        acc[framework] = { prompts: [], subcategories: {} };
       }
       acc[framework].prompts.push(prompt);
-
-      // Also group by subcategory if present
       if (prompt.subCategory) {
         if (!acc[framework].subcategories[prompt.subCategory]) {
           acc[framework].subcategories[prompt.subCategory] = [];
         }
         acc[framework].subcategories[prompt.subCategory].push(prompt);
       }
-
       return acc;
     }, {});
 
@@ -1455,14 +1463,8 @@ function PromptsTab() {
     try {
       setLoading(true);
       const params = {};
-      // Only add role filter if it's not empty
-      if (roleFilter && roleFilter !== '') {
-        params.role = roleFilter;
-      }
-      // Only add search if it's not empty
-      if (search && search.trim()) {
-        params.search = search.trim();
-      }
+      if (roleFilter && roleFilter !== '') params.role = roleFilter;
+      if (search && search.trim()) params.search = search.trim();
       const response = await platformAdminService.getPrompts(params);
       setPrompts(response.data || []);
     } catch (error) {
@@ -1473,12 +1475,10 @@ function PromptsTab() {
     }
   };
 
-  // Fetch on mount and when roleFilter changes
   useEffect(() => {
     fetchPrompts();
   }, [roleFilter]);
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchPrompts();
@@ -1521,19 +1521,11 @@ function PromptsTab() {
   };
 
   const handleSave = async () => {
-    if (!formData.title?.trim()) {
-      toast.error('Title is required');
-      return;
-    }
-    if (!formData.content?.trim()) {
-      toast.error('Prompt content is required');
-      return;
-    }
+    if (!formData.title?.trim()) { toast.error('Title is required'); return; }
+    if (!formData.content?.trim()) { toast.error('Prompt content is required'); return; }
     if (formData.role === 'content_writer' && !formData.frameworkType) {
-      toast.error('Framework type is required for Content Planner role');
-      return;
+      toast.error('Framework type is required for Content Planner role'); return;
     }
-
     setSaving(true);
     try {
       const promptData = {
@@ -1541,7 +1533,6 @@ function PromptsTab() {
         tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         isSystem: true,
       };
-
       if (editModal === 'new') {
         await platformAdminService.createPrompt(promptData);
         toast.success('Prompt created successfully');
@@ -1642,22 +1633,17 @@ function PromptsTab() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {/* Content Planner Prompts - Grouped by Framework */}
-          {/* Show when: role filter is content_writer, or role filter is empty (all roles) */}
           {(roleFilter === 'content_writer' || roleFilter === '') && contentWriterPrompts.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Layers className="w-5 h-5 text-purple-500" />
                 Content Planner Frameworks
               </h3>
-
-              {/* Frameworks with prompts */}
               {Object.entries(groupedByFramework).map(([framework, data]) => {
                 const frameworkPrompts = data.prompts || [];
                 const subcategories = data.subcategories || {};
                 const subcategoryKeys = Object.keys(subcategories);
                 const uncategorizedPrompts = frameworkPrompts.filter(p => !p.subCategory);
-
                 return (
                   <Card key={framework} className="overflow-hidden">
                     <button
@@ -1684,10 +1670,8 @@ function PromptsTab() {
                         <ChevronRight className="w-5 h-5 text-gray-400" />
                       )}
                     </button>
-
                     {expandedFrameworks[framework] && (
                       <div className="p-4">
-                        {/* Subcategory Groups */}
                         {subcategoryKeys.length > 0 && (
                           <div className="space-y-4 mb-4">
                             {subcategoryKeys.map(subKey => {
@@ -1697,38 +1681,25 @@ function PromptsTab() {
                                   <div className="flex items-center gap-2 mb-2">
                                     <Tag className="w-4 h-4 text-indigo-500" />
                                     <h5 className="text-sm font-medium text-indigo-700">{subKey}</h5>
-                                    <span className="text-xs text-gray-400">
-                                      {subPrompts.length} prompt{subPrompts.length !== 1 ? 's' : ''}
-                                    </span>
+                                    <span className="text-xs text-gray-400">{subPrompts.length} prompt{subPrompts.length !== 1 ? 's' : ''}</span>
                                   </div>
                                   <div className="space-y-2">
                                     {subPrompts.map((prompt) => (
-                                      <div
-                                        key={prompt._id}
-                                        className={`p-3 rounded-lg border transition-all ${
-                                          !prompt.isActive ? 'opacity-60 bg-gray-50' : 'bg-white'
-                                        } hover:border-primary-300`}
-                                      >
+                                      <div key={prompt._id} className={`p-3 rounded-lg border transition-all ${!prompt.isActive ? 'opacity-60 bg-gray-50' : 'bg-white'} hover:border-primary-300`}>
                                         <div className="flex items-start justify-between">
                                           <div className="flex-1 min-w-0">
                                             <h6 className="font-medium text-gray-900 text-sm truncate">{prompt.title}</h6>
-                                            <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                                              {prompt.description || prompt.content?.substring(0, 80)}...
-                                            </p>
+                                            <p className="text-xs text-gray-500 mt-1 line-clamp-1">{prompt.description || prompt.content?.substring(0, 80)}...</p>
                                             <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
                                               <span>Used {prompt.usageCount || 0}x</span>
-                                              {prompt.isActive ? (
-                                                <span className="text-green-500">Active</span>
-                                              ) : (
-                                                <span>Inactive</span>
-                                              )}
+                                              {prompt.isActive ? <span className="text-green-500">Active</span> : <span>Inactive</span>}
                                             </div>
                                           </div>
                                           <div className="flex gap-1">
-                                            <button onClick={() => setViewModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                                            <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                                            <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`} title={prompt.isActive ? 'Deactivate' : 'Activate'}><Power className="w-3.5 h-3.5" /></button>
-                                            <button onClick={() => handleDelete(prompt._id)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                            <button onClick={() => setViewModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded"><Eye className="w-3.5 h-3.5" /></button>
+                                            <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded"><Edit className="w-3.5 h-3.5" /></button>
+                                            <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`}><Power className="w-3.5 h-3.5" /></button>
+                                            <button onClick={() => handleDelete(prompt._id)} className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                                           </div>
                                         </div>
                                       </div>
@@ -1739,8 +1710,6 @@ function PromptsTab() {
                             })}
                           </div>
                         )}
-
-                        {/* Uncategorized Prompts (no subCategory) */}
                         {uncategorizedPrompts.length > 0 && (
                           <div className={subcategoryKeys.length > 0 ? 'border-t border-gray-200 pt-4' : ''}>
                             {subcategoryKeys.length > 0 && (
@@ -1751,32 +1720,21 @@ function PromptsTab() {
                             )}
                             <div className="space-y-2">
                               {uncategorizedPrompts.map((prompt) => (
-                                <div
-                                  key={prompt._id}
-                                  className={`p-3 rounded-lg border transition-all ${
-                                    !prompt.isActive ? 'opacity-60 bg-gray-50' : 'bg-white'
-                                  } hover:border-primary-300`}
-                                >
+                                <div key={prompt._id} className={`p-3 rounded-lg border transition-all ${!prompt.isActive ? 'opacity-60 bg-gray-50' : 'bg-white'} hover:border-primary-300`}>
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">
                                       <h6 className="font-medium text-gray-900 text-sm truncate">{prompt.title}</h6>
-                                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                                        {prompt.description || prompt.content?.substring(0, 80)}...
-                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">{prompt.description || prompt.content?.substring(0, 80)}...</p>
                                       <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
                                         <span>Used {prompt.usageCount || 0}x</span>
-                                        {prompt.isActive ? (
-                                          <span className="text-green-500">Active</span>
-                                        ) : (
-                                          <span>Inactive</span>
-                                        )}
+                                        {prompt.isActive ? <span className="text-green-500">Active</span> : <span>Inactive</span>}
                                       </div>
                                     </div>
                                     <div className="flex gap-1">
-                                      <button onClick={() => setViewModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                                      <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                                      <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`} title={prompt.isActive ? 'Deactivate' : 'Activate'}><Power className="w-3.5 h-3.5" /></button>
-                                      <button onClick={() => handleDelete(prompt._id)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => setViewModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded"><Eye className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded"><Edit className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`}><Power className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => handleDelete(prompt._id)} className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                                     </div>
                                   </div>
                                 </div>
@@ -1789,31 +1747,19 @@ function PromptsTab() {
                   </Card>
                 );
               })}
-
-              {/* Empty frameworks - show all available frameworks */}
               {frameworkOptions.filter(f => !groupedByFramework[f.value]).length > 0 && (
                 <Card className="border-dashed">
                   <CardBody className="py-6">
                     <div className="text-center">
                       <BookOpen className="w-10 h-10 mx-auto text-gray-300 mb-3" />
                       <h4 className="font-medium text-gray-700">Available Frameworks</h4>
-                      <p className="text-sm text-gray-500 mt-1 mb-4">
-                        These frameworks don't have prompts yet. Create prompts for them.
-                      </p>
+                      <p className="text-sm text-gray-500 mt-1 mb-4">These frameworks don't have prompts yet.</p>
                       <div className="flex flex-wrap justify-center gap-2">
                         {frameworkOptions.filter(f => !groupedByFramework[f.value]).map(f => (
                           <button
                             key={f.value}
                             onClick={() => {
-                              setFormData({
-                                title: '',
-                                role: 'content_writer',
-                                frameworkType: f.value,
-                                content: '',
-                                category: 'general',
-                                platform: 'all',
-                                isActive: true,
-                              });
+                              setFormData({ title: '', role: 'content_writer', frameworkType: f.value, content: '', category: 'general', platform: 'all', isActive: true });
                               setEditModal('new');
                             }}
                             className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors"
@@ -1829,7 +1775,6 @@ function PromptsTab() {
             </div>
           )}
 
-          {/* Other Role Prompts - Regular Grid View */}
           {(roleFilter !== 'content_writer' || !roleFilter) && otherRolePrompts.length > 0 && (
             <div>
               {roleFilter && roleFilter !== 'content_writer' && (
@@ -1854,9 +1799,7 @@ function PromptsTab() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <h4 className="font-semibold text-gray-900">{prompt.title}</h4>
-                              {prompt.isSystem && (
-                                <Badge className="bg-purple-100 text-purple-700">System</Badge>
-                              )}
+                              {prompt.isSystem && <Badge className="bg-purple-100 text-purple-700">System</Badge>}
                               <Badge className={prompt.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
                                 {prompt.isActive ? 'Active' : 'Inactive'}
                               </Badge>
@@ -1865,30 +1808,15 @@ function PromptsTab() {
                               <Badge className="bg-blue-100 text-blue-700">
                                 {roleOptions.find(r => r.value === prompt.role)?.label || prompt.role}
                               </Badge>
-                              {prompt.category && (
-                                <>
-                                  <span className="text-gray-400">•</span>
-                                  <span className="text-gray-600">{prompt.category}</span>
-                                </>
-                              )}
+                              {prompt.category && <><span className="text-gray-400">•</span><span className="text-gray-600">{prompt.category}</span></>}
                             </div>
-                            <p className="text-sm text-gray-600 line-clamp-2">
-                              {prompt.content?.substring(0, 200)}...
-                            </p>
+                            <p className="text-sm text-gray-600 line-clamp-2">{prompt.content?.substring(0, 200)}...</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <Button variant="ghost" size="sm" onClick={() => setViewModal(prompt)} title="View">
-                              <Eye size={16} />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleToggleActive(prompt)} title={prompt.isActive ? 'Deactivate' : 'Activate'}>
-                              <Power size={16} className={prompt.isActive ? 'text-green-600' : 'text-gray-400'} />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => openEditModal(prompt)} title="Edit">
-                              <Edit size={16} />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => handleDelete(prompt._id)} title="Delete">
-                              <Trash2 size={16} />
-                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setViewModal(prompt)}><Eye size={16} /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleToggleActive(prompt)}><Power size={16} className={prompt.isActive ? 'text-green-600' : 'text-gray-400'} /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => openEditModal(prompt)}><Edit size={16} /></Button>
+                            <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => handleDelete(prompt._id)}><Trash2 size={16} /></Button>
                           </div>
                         </div>
                       </CardBody>
@@ -1896,16 +1824,6 @@ function PromptsTab() {
                   ))}
               </div>
             </div>
-          )}
-
-          {/* Show regular list when viewing all prompts (not filtered by role) */}
-          {roleFilter === '' && contentWriterPrompts.length === 0 && otherRolePrompts.length === 0 && (
-            <Card>
-              <CardBody className="py-12 text-center">
-                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">No prompts found. Create your first prompt to get started.</p>
-              </CardBody>
-            </Card>
           )}
         </div>
       )}
@@ -1923,57 +1841,30 @@ function PromptsTab() {
                   <X size={18} />
                 </Button>
               </div>
-
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                  <input
-                    type="text"
-                    value={formData.title || ''}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="Enter prompt title"
-                  />
+                  <input type="text" value={formData.title || ''} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Enter prompt title" />
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
-                    <select
-                      value={formData.role || 'content_writer'}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      {roleOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
+                    <select value={formData.role || 'content_writer'} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      {roleOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Framework {formData.role === 'content_writer' && '*'}
-                    </label>
-                    <select
-                      value={formData.frameworkType || ''}
-                      onChange={(e) => setFormData({ ...formData, frameworkType: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Framework {formData.role === 'content_writer' && '*'}</label>
+                    <select value={formData.frameworkType || ''} onChange={(e) => setFormData({ ...formData, frameworkType: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
                       <option value="">Select Framework</option>
-                      {frameworkOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
+                      {frameworkOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <select
-                      value={formData.category || 'general'}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
+                    <select value={formData.category || 'general'} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
                       <option value="general">General</option>
                       <option value="instagram">Instagram</option>
                       <option value="facebook">Facebook</option>
@@ -1986,11 +1877,7 @@ function PromptsTab() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
-                    <select
-                      value={formData.platform || 'all'}
-                      onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
+                    <select value={formData.platform || 'all'} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
                       <option value="all">All Platforms</option>
                       <option value="instagram">Instagram</option>
                       <option value="facebook">Facebook</option>
@@ -2002,60 +1889,28 @@ function PromptsTab() {
                     </select>
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prompt Content *</label>
-                  <textarea
-                    value={formData.content || ''}
-                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
-                    rows={10}
-                    placeholder="Enter the prompt content..."
-                  />
+                  <textarea value={formData.content || ''} onChange={(e) => setFormData({ ...formData, content: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm" rows={10} placeholder="Enter the prompt content..." />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input
-                    type="text"
-                    value={formData.description || ''}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="Brief description of this prompt"
-                  />
+                  <input type="text" value={formData.description || ''} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Brief description of this prompt" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={formData.tags || ''}
-                    onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="e.g., hooks, engagement, conversion"
-                  />
+                  <input type="text" value={formData.tags || ''} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="e.g., hooks, engagement, conversion" />
                 </div>
-
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.isActive !== false}
-                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                      className="rounded"
-                    />
+                    <input type="checkbox" checked={formData.isActive !== false} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="rounded" />
                     <span className="text-sm text-gray-700">Active</span>
                   </label>
                 </div>
               </div>
-
               <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave} loading={saving}>
-                  {editModal === 'new' ? 'Create' : 'Save'}
-                </Button>
+                <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>Cancel</Button>
+                <Button onClick={handleSave} loading={saving}>{editModal === 'new' ? 'Create' : 'Save'}</Button>
               </div>
             </CardBody>
           </Card>
@@ -2069,59 +1924,29 @@ function PromptsTab() {
             <CardBody className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">{viewModal.title}</h3>
-                <Button variant="ghost" size="sm" onClick={() => setViewModal(null)}>
-                  <X size={18} />
-                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setViewModal(null)}><X size={18} /></Button>
               </div>
-
               <div className="space-y-3 mb-4">
                 <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-blue-100 text-blue-700">
-                    {roleOptions.find(r => r.value === viewModal.role)?.label || viewModal.role}
-                  </Badge>
-                  {viewModal.frameworkType && (
-                    <Badge className="bg-amber-100 text-amber-700">{viewModal.frameworkType}</Badge>
-                  )}
-                  {viewModal.category && (
-                    <Badge className="bg-gray-100 text-gray-700">{viewModal.category}</Badge>
-                  )}
-                  {viewModal.platform && viewModal.platform !== 'all' && (
-                    <Badge className="bg-green-100 text-green-700">{viewModal.platform}</Badge>
-                  )}
-                  <Badge className={viewModal.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                    {viewModal.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
+                  <Badge className="bg-blue-100 text-blue-700">{roleOptions.find(r => r.value === viewModal.role)?.label || viewModal.role}</Badge>
+                  {viewModal.frameworkType && <Badge className="bg-amber-100 text-amber-700">{viewModal.frameworkType}</Badge>}
+                  {viewModal.category && <Badge className="bg-gray-100 text-gray-700">{viewModal.category}</Badge>}
+                  {viewModal.platform && viewModal.platform !== 'all' && <Badge className="bg-green-100 text-green-700">{viewModal.platform}</Badge>}
+                  <Badge className={viewModal.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>{viewModal.isActive ? 'Active' : 'Inactive'}</Badge>
                 </div>
               </div>
-
               <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono overflow-x-auto">
-                  {viewModal.content}
-                </pre>
+                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono overflow-x-auto">{viewModal.content}</pre>
               </div>
-
-              {viewModal.description && (
-                <p className="text-sm text-gray-600 mb-4">{viewModal.description}</p>
-              )}
-
+              {viewModal.description && <p className="text-sm text-gray-600 mb-4">{viewModal.description}</p>}
               {viewModal.tags && viewModal.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {viewModal.tags.map((tag, i) => (
-                    <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                      {tag}
-                    </span>
-                  ))}
+                  {viewModal.tags.map((tag, i) => <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">{tag}</span>)}
                 </div>
               )}
-
               <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setViewModal(null)}>
-                  Close
-                </Button>
-                <Button onClick={() => { setViewModal(null); openEditModal(viewModal); }}>
-                  <Edit size={16} className="mr-2" />
-                  Edit
-                </Button>
+                <Button variant="outline" onClick={() => setViewModal(null)}>Close</Button>
+                <Button onClick={() => { setViewModal(null); openEditModal(viewModal); }}><Edit size={16} className="mr-2" />Edit</Button>
               </div>
             </CardBody>
           </Card>
@@ -2203,25 +2028,15 @@ function LogsTab() {
                 <tbody className="divide-y divide-gray-200">
                   {logs.map((log) => (
                     <tr key={log._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {new Date(log.createdAt).toLocaleString()}
+                      <td className="px-4 py-3 text-sm text-gray-500">{new Date(log.createdAt).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900">{log.userId?.name || 'System'}</div>
+                        <div className="text-xs text-gray-500">{log.userId?.email}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm font-medium text-gray-900">
-                          {log.userId?.name || 'System'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {log.userId?.email}
-                        </div>
+                        <Badge className="bg-blue-100 text-blue-700">{log.action}</Badge>
                       </td>
-                      <td className="px-4 py-3">
-                        <Badge className="bg-blue-100 text-blue-700">
-                          {log.action}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {log.organizationId?.name || '-'}
-                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{log.organizationId?.name || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {log.details ? JSON.stringify(log.details).substring(0, 50) + '...' : '-'}
                       </td>
@@ -2242,27 +2057,23 @@ export default function PlatformAdminDashboardPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Get current tab from URL - recalculate on every render
   const tabFromUrl = searchParams.get('tab');
 
   const [activeTab, setActiveTab] = useState(() => {
-    // Initialize from URL on first render
     return tabFromUrl && TABS.some(t => t.id === tabFromUrl) ? tabFromUrl : 'overview';
   });
   const [stats, setStats] = useState({});
   const [statsLoading, setStatsLoading] = useState(true);
   const [plans, setPlans] = useState([]);
 
-  // Update activeTab when URL changes
   useEffect(() => {
     const validTab = tabFromUrl && TABS.some(t => t.id === tabFromUrl);
     if (validTab) {
       setActiveTab(tabFromUrl);
     } else if (!tabFromUrl) {
-      // If no tab in URL, default to overview
       setActiveTab('overview');
     }
-  }, [location.search]); // Re-run when URL search params change
+  }, [location.search]);
 
   useEffect(() => {
     if (activeTab === 'overview') {
@@ -2299,20 +2110,13 @@ export default function PlatformAdminDashboardPage() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'overview':
-        return <OverviewTab stats={stats} loading={statsLoading} plans={plans} />;
-      case 'organizations':
-        return <OrganizationsTab />;
-      case 'users':
-        return <UsersTab />;
-      case 'plans':
-        return <PlansTab />;
-      case 'prompts':
-        return <PromptsTab />;
-      case 'logs':
-        return <LogsTab />;
-      default:
-        return null;
+      case 'overview': return <OverviewTab stats={stats} loading={statsLoading} plans={plans} />;
+      case 'organizations': return <OrganizationsTab />;
+      case 'users': return <UsersTab />;
+      case 'plans': return <PlansTab />;
+      case 'prompts': return <PromptsTab />;
+      case 'logs': return <LogsTab />;
+      default: return null;
     }
   };
 
