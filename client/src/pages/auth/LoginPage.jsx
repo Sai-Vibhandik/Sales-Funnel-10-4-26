@@ -45,14 +45,12 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
-        <div className="text-center mb-8">
+        <div className="text-center mb-4">
           <img
             src={growthValleyLogo}
             alt="Growth Valley"
-            className="mx-auto w-16 h-16 rounded-xl object-cover shadow-lg mb-4"
+            className="mx-auto h-32 w-auto rounded-xl object-contain"
           />
-          <h1 className="text-3xl font-bold text-gray-900">Growth Valley</h1>
-          <p className="mt-2 text-gray-600">Performance Marketer Dashboard</p>
         </div>
 
         <Card>

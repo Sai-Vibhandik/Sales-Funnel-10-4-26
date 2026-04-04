@@ -382,20 +382,22 @@ const checkOrgLimits = (resourceType) => {
 
       switch (resourceType) {
         case 'user':
+        case 'users':
           limitKey = 'maxUsers';
-          currentCount = usage.usersCount;
+          currentCount = usage.usersCount || 0;
           break;
         case 'project':
+        case 'projects':
           limitKey = 'maxProjects';
-          currentCount = usage.projectsCount;
+          currentCount = usage.projectsCount || 0;
           break;
         case 'storage':
           limitKey = 'storageLimitMB';
-          currentCount = usage.storageUsedMB;
+          currentCount = usage.storageUsedMB || 0;
           break;
         case 'aiCalls':
           limitKey = 'aiCallsPerMonth';
-          currentCount = usage.aiCallsThisMonth;
+          currentCount = usage.aiCallsThisMonth || 0;
           break;
         default:
           return next();

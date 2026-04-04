@@ -107,14 +107,17 @@ export default function OnboardingPage() {
   );
 
   const handleCreateOrganization = async (data) => {
-    // If it's a paid plan, show checkout modal instead of creating directly
-    if (isPaidPlan) {
-      setOrganizationData(data);
-      setShowCheckout(true);
-      return;
-    }
+    // ============================================
+    // PAYMENT CHECKOUT - TEMPORARILY DISABLED FOR TESTING
+    // TODO: Re-enable when Razorpay/Stripe APIs are configured
+    // ============================================
+    // if (isPaidPlan) {
+    //   setOrganizationData(data);
+    //   setShowCheckout(true);
+    //   return;
+    // }
 
-    // Free plan - create organization directly
+    // Create organization directly (payment verification disabled for testing)
     await createOrganization(data);
   };
 
@@ -232,8 +235,8 @@ export default function OnboardingPage() {
                 </div>
               )}
 
-              {/* Payment Required Notice for Paid Plans */}
-              {isPaidPlan && !showCheckout && (
+              {/* Payment Required Notice for Paid Plans - TEMPORARILY DISABLED */}
+              {/* {isPaidPlan && !showCheckout && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
                   <div className="flex items-start gap-3">
                     <CreditCard className="h-5 w-5 text-amber-600 mt-0.5" />
@@ -246,7 +249,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              )} */}
 
               <form onSubmit={handleSubmit(handleCreateOrganization)} className="space-y-4">
                 <Input
@@ -277,12 +280,12 @@ export default function OnboardingPage() {
                   size="lg"
                   loading={loading}
                 >
-                  {isPaidPlan ? 'Continue to Payment' : 'Create Organization'}
+                  Create Organization
                 </Button>
               </form>
 
-              {/* Free Plan Option */}
-              {isPaidPlan && (
+              {/* Free Plan Option - TEMPORARILY DISABLED */}
+              {/* {isPaidPlan && (
                 <div className="mt-4 text-center">
                   <p className="text-sm text-gray-500">
                     Not ready to pay?{' '}
@@ -294,7 +297,7 @@ export default function OnboardingPage() {
                     </Link>
                   </p>
                 </div>
-              )}
+              )} */}
             </CardBody>
           </Card>
         </div>

@@ -2,6 +2,7 @@ const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const Task = require('../models/Task');
 const { getStageStatus, completeStage } = require('../middleware/stageGating');
+const UsageService = require('../services/usageService');
 
 // Helper to emit notification (will be set from index.js)
 let io = null;
@@ -310,6 +311,9 @@ exports.createProject = async (req, res, next) => {
     project.calculateProgress();
     await project.save();
 
+    // Track usage - increment project count
+    await UsageService.trackUsage(req.user.currentOrganization, 'projects', 1);
+
     res.status(201).json({
       success: true,
       data: {
@@ -445,6 +449,9 @@ exports.deleteProject = async (req, res, next) => {
 
     // 4. Delete the project itself
     await project.deleteOne();
+
+    // Track usage - decrement project count
+    await UsageService.decreaseUsage(req.user.currentOrganization, 'projects', 1);
 
     res.status(200).json({
       success: true,

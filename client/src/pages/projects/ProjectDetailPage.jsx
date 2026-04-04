@@ -18,6 +18,7 @@ import {
   Lightbulb,
   CheckCircle,
   Lock,
+  Eye,
   Users,
   UserPlus,
   ChevronDown,
@@ -516,8 +517,7 @@ export default function ProjectDetailPage() {
         <>
           <h2 className="text-lg font-semibold text-gray-900">Workflow Stages</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Performance Marketer can only edit first 3 stages: Market Research, Offer Engineering, Traffic Strategy */}
-            {stages.slice(1, 4).map((stage, index) => {
+            {stages.slice(1).map((stage, index) => {
               const Icon = STAGE_ICONS[stage.key] || CheckCircle;
               const isAccessible = stage.isAccessible;
               const isCompleted = stage.isCompleted;
@@ -560,7 +560,11 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
                         <p className="text-sm text-gray-500 mt-1">
-                          Stage {stage.order} of 6
+                          {isCompleted
+                            ? 'Completed'
+                            : isAccessible
+                            ? 'Ready to edit'
+                            : 'Complete previous stage first'}
                         </p>
                         {isAccessible && !isCompleted && (
                           <Button

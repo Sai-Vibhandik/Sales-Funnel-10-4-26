@@ -205,23 +205,19 @@ const isNavItemActive = (item) => {
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-dark-200">
         {!collapsed && (
-          <Link to={homeLink} className="flex items-center gap-3">
+          <Link to={homeLink} className="flex items-center">
             <img
               src={growthValleyLogo}
               alt="Growth Valley"
-              className="w-9 h-9 rounded-xl object-cover shadow-lg"
+              className="h-28 w-auto mx-auto rounded-lg object-contain"
             />
-            <div>
-              <span className="font-bold text-white text-lg">Growth</span>
-              <span className="font-bold text-primary-500 text-lg ml-1">Valley</span>
-            </div>
           </Link>
         )}
         {collapsed && (
           <img
             src={growthValleyLogo}
             alt="Growth Valley"
-            className="w-9 h-9 mx-auto rounded-xl object-cover shadow-lg"
+            className="w-8 h-8 mx-auto rounded-lg object-cover shadow-lg"
           />
         )}
         <button

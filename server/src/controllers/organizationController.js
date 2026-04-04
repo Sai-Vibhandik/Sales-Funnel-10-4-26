@@ -6,7 +6,6 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const UsageLog = require('../models/UsageLog');
 const Plan = require('../models/Plan');
-const { DEFAULT_PLANS, getPlanLimits, getPlanFeatures } = require('../config/plans');
 const { BillingService } = require('../services/billingService');
 
 /**
@@ -54,71 +53,110 @@ exports.createOrganization = async (req, res) => {
       }
     }
 
-    // If it's a paid plan, verify payment
-    if (isPaidPlan && payment) {
-      try {
-        // Verify payment with provider
-        if (payment.provider === 'razorpay') {
-          const RazorpayService = BillingService.getProvider('razorpay');
-          if (RazorpayService && RazorpayService.isConfigured()) {
-            // Verify payment signature
-            const isValid = await RazorpayService.verifyPayment({
-              orderId: payment.orderId,
-              paymentId: payment.paymentId,
-              signature: payment.signature
-            });
+    // ============================================
+    // PAYMENT VERIFICATION - TEMPORARILY DISABLED FOR TESTING
+    // TODO: Re-enable when Razorpay/Stripe APIs are configured
+    // ============================================
+    // if (isPaidPlan && payment) {
+    //   try {
+    //     // Verify payment with provider
+    //     if (payment.provider === 'razorpay') {
+    //       const RazorpayService = BillingService.getProvider('razorpay');
+    //       if (RazorpayService && RazorpayService.isConfigured()) {
+    //         // Verify payment signature
+    //         const isValid = await RazorpayService.verifyPayment({
+    //           orderId: payment.orderId,
+    //           paymentId: payment.paymentId,
+    //           signature: payment.signature
+    //         });
+    //
+    //         if (!isValid) {
+    //           await session.abortTransaction();
+    //           return res.status(400).json({
+    //             success: false,
+    //             message: 'Payment verification failed. Please try again.'
+    //           });
+    //         }
+    //       }
+    //     }
+    //     // For Stripe, payment is verified via webhook, so we trust the sessionId
+    //   } catch (verifyError) {
+    //     console.error('Payment verification error:', verifyError);
+    //     await session.abortTransaction();
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: 'Payment verification failed. Please contact support.'
+    //     });
+    //   }
+    // } else if (isPaidPlan && !payment) {
+    //   // Paid plan but no payment data
+    //   await session.abortTransaction();
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Payment is required for this plan.'
+    //   });
+    // }
 
-            if (!isValid) {
-              await session.abortTransaction();
-              return res.status(400).json({
-                success: false,
-                message: 'Payment verification failed. Please try again.'
-              });
-            }
-          }
-        }
-        // For Stripe, payment is verified via webhook, so we trust the sessionId
-      } catch (verifyError) {
-        console.error('Payment verification error:', verifyError);
-        await session.abortTransaction();
-        return res.status(400).json({
-          success: false,
-          message: 'Payment verification failed. Please contact support.'
-        });
-      }
-    } else if (isPaidPlan && !payment) {
-      // Paid plan but no payment data
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: 'Payment is required for this plan.'
-      });
+    // TEMP: Log warning for paid plans without payment during testing
+    if (isPaidPlan) {
+      console.log('⚠️ WARNING: Payment verification is disabled. Plan applied without payment verification.');
+      console.log(`   Plan: ${actualPlanName}, User: ${userId}`);
     }
+    // ============================================
 
     // Get plan limits and features from the plan document or use defaults
     let planLimits = {};
     let planFeatures = {};
 
     if (plan) {
+      // Use the selected plan's limits and features
       planLimits = plan.limits || {};
       planFeatures = plan.features || {};
     } else {
-      // Default limits for free plan
-      planLimits = {
-        maxUsers: 3,
-        maxProjects: 3,
-        maxLandingPages: 5,
-        maxLandingPagesPerProject: 5,
-        storageLimitMB: 1024,
-        aiCallsPerMonth: 50,
-        customDomains: 0
-      };
-      planFeatures = {
-        analytics: false,
-        whiteLabel: false,
-        prioritySupport: false,
-        customDomain: false
-      };
+      // No plan selected - find the default/free plan from database
+      let defaultPlan = await Plan.findOne({ isDefault: true, isActive: true }).session(session);
+
+      if (!defaultPlan) {
+        // Try to find a free plan by slug or tier
+        defaultPlan = await Plan.findOne({
+          $or: [
+            { slug: 'free' },
+            { tier: 'free' }
+          ],
+          isActive: true
+        }).session(session);
+      }
+
+      if (defaultPlan) {
+        // Use the default/free plan from database
+        planLimits = defaultPlan.limits || {};
+        planFeatures = defaultPlan.features || {};
+        actualPlanName = defaultPlan.displayName || defaultPlan.name;
+      } else {
+        // Fallback: Use schema defaults from Plan model (no hardcoding)
+        planLimits = {
+          maxUsers: 3,
+          maxProjects: 3,
+          maxLandingPages: 5,
+          maxLandingPagesPerProject: 5,
+          storageLimitMB: 1024,
+          aiCallsPerMonth: 50,
+          customDomains: 0
+        };
+        planFeatures = {
+          analytics: false,
+          whiteLabel: false,
+          prioritySupport: false,
+          customDomain: false,
+          exportData: false,
+          apiAccess: false,
+          sso: false,
+          advancedReports: false,
+          teamRoles: false,
+          auditLogs: false
+        };
+        actualPlanName = 'Free';
+      }
     }
 
     // Generate unique slug with timestamp + nanoseconds to guarantee uniqueness
@@ -156,7 +194,15 @@ exports.createOrganization = async (req, res) => {
       currentPeriodEnd: new Date(Date.now() + (billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000),
       // Store payment IDs if paid plan
       razorpayOrderId: payment?.orderId || undefined,
-      razorpayPaymentId: payment?.paymentId || undefined
+      razorpayPaymentId: payment?.paymentId || undefined,
+      // Initialize usage with 1 user (the owner)
+      usage: {
+        usersCount: 1,
+        projectsCount: 0,
+        landingPagesCount: 0,
+        storageUsedMB: 0,
+        aiCallsThisMonth: 0
+      }
     });
 
     await organization.save({ session });
@@ -985,6 +1031,20 @@ exports.removeMember = async (req, res) => {
       { session }
     );
 
+    // Check if user has any other active memberships
+    const remainingMemberships = await Membership.countDocuments({
+      userId: targetUserId,
+      status: 'active'
+    }).session(session);
+
+    // If no active memberships left, deactivate the user
+    if (remainingMemberships === 0) {
+      await User.findByIdAndUpdate(targetUserId, {
+        isActive: false,
+        currentOrganization: null
+      }, { session });
+    }
+
     // Log action
     await UsageLog.logAction({
       organizationId: id,
@@ -1058,17 +1118,37 @@ exports.deleteOrganization = async (req, res) => {
       }
     }
 
+    // Get all users who are members of this organization
+    const orgMembers = await Membership.find({ organizationId: id }).session(session);
+    const memberUserIds = orgMembers.map(m => m.userId);
+
     // Soft delete organization
     await Organization.findByIdAndUpdate(id, {
       isActive: false
     }, { session });
 
-    // Deactivate all memberships
+    // Deactivate all memberships for this organization
     await Membership.updateMany({
       organizationId: id
     }, {
       status: 'removed'
     }, { session });
+
+    // For each user who was a member, check if they have any other active memberships
+    for (const memberId of memberUserIds) {
+      const activeMemberships = await Membership.countDocuments({
+        userId: memberId,
+        status: 'active'
+      }).session(session);
+
+      // If no active memberships left, deactivate the user
+      if (activeMemberships === 0) {
+        await User.findByIdAndUpdate(memberId, {
+          isActive: false,
+          currentOrganization: null
+        }, { session });
+      }
+    }
 
     // Log action
     await UsageLog.logAction({

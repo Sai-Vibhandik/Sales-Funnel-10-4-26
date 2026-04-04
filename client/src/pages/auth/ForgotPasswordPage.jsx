@@ -53,10 +53,9 @@ export default function ForgotPasswordPage() {
             <img
               src={growthValleyLogo}
               alt="Growth Valley"
-              className="mx-auto w-16 h-16 rounded-xl object-cover shadow-lg mb-4"
+              className="mx-auto h-16 w-auto rounded-xl object-contain"
             />
-            <h1 className="text-3xl font-bold text-gray-900">Growth Valley</h1>
-            <p className="mt-2 text-gray-600">Performance Marketer Dashboard</p>
+            <p className="mt-4 text-gray-600">Performance Marketer Dashboard</p>
           </div>
 
           <Card>

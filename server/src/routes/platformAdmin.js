@@ -559,6 +559,24 @@ router.put('/plans/:id', async (req, res) => {
       });
     }
 
+    // If limits or features were updated, sync to all organizations using this plan
+    if (req.body.limits || req.body.features) {
+      const updateData = {};
+      if (req.body.limits) {
+        updateData.planLimits = plan.limits;
+      }
+      if (req.body.features) {
+        updateData.features = plan.features;
+      }
+
+      const updateResult = await Organization.updateMany(
+        { plan: plan.slug },
+        { $set: updateData }
+      );
+
+      console.log(`Updated ${updateResult.modifiedCount} organizations with new plan limits/features`);
+    }
+
     res.json({
       success: true,
       message: 'Plan updated successfully',

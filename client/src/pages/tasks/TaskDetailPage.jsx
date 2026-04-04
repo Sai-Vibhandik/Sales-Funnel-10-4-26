@@ -1005,8 +1005,8 @@ export default function TaskDetailPage() {
             </CardBody>
           </Card>
 
-          {/* AI Content Brief - For Content Writers, Graphic Designers, Video Editors, UI/UX Designers, Developers */}
-          {['content_writer', 'graphic_designer', 'video_editor', 'ui_ux_designer', 'developer'].includes(user?.role) && (
+          {/* AI Content Brief - For Content Writers, Graphic Designers, Video Editors */}
+          {['content_writer', 'graphic_designer', 'video_editor'].includes(user?.role) && (
             <Card>
               <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
                 <div className="flex items-center justify-between">

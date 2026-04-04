@@ -1,9 +1,13 @@
 /**
  * Plans Configuration
  *
- * Dynamic pricing plans managed by admin.
- * Default plans seeded on first run.
+ * IMPORTANT: This file is ONLY for seeding default plans.
+ * At runtime, all plan data should be fetched from the database (Plan model).
  *
+ * Platform Admins can create/edit/delete plans through the UI.
+ * Changes made through the UI are immediately reflected.
+ *
+ * Default plans seeded on first run.
  * Structure:
  * - tier: Plan tier identifier
  * - name: Display name
@@ -13,6 +17,7 @@
  */
 
 // Default plans seeded on first install
+// These are ONLY used for seeding - runtime uses database
 const DEFAULT_PLANS = [
   {
     name: 'Free',

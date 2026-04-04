@@ -29,6 +29,7 @@ const {
 } = require('../controllers/strategySummaryController');
 const { protect, authorize } = require('../middleware/auth');
 const { handleUpload, uploadBrandAssets } = require('../middleware/upload');
+const { checkOrgLimits } = require('../middleware/tenant');
 
 // All routes are protected
 router.use(protect);
@@ -42,7 +43,7 @@ router.get('/assigned', getAssignedProjects);
 // Project routes
 router.route('/')
   .get(getProjects)
-  .post(createProject);
+  .post(checkOrgLimits('project'), createProject);
 
 router.route('/:id')
   .get(getProject)

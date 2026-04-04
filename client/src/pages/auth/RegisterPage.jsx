@@ -166,9 +166,9 @@ export default function RegisterPage() {
           <img
             src={growthValleyLogo}
             alt="Growth Valley"
-            className="mx-auto w-16 h-16 rounded-xl object-cover shadow-lg mb-4"
+            className="mx-auto h-16 w-auto rounded-xl object-contain"
           />
-          <h1 className="text-3xl font-bold text-gray-900">Create Your Account</h1>
+          <h1 className="mt-4 text-2xl font-bold text-gray-900">Create Your Account</h1>
           <p className="mt-2 text-gray-600">Join Growth Valley and get your dedicated marketing team</p>
         </div>
 

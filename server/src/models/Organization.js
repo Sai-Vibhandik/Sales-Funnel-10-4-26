@@ -204,14 +204,27 @@ organizationSchema.methods.hasReachedLimit = function(limitType) {
   const usage = this.usage;
 
   switch (limitType) {
-    case 'users':
-      return usage.usersCount >= limits.maxUsers;
-    case 'projects':
-      return usage.projectsCount >= limits.maxProjects;
-    case 'storage':
-      return usage.storageUsedMB >= limits.storageLimitMB;
-    case 'aiCalls':
-      return usage.aiCallsThisMonth >= limits.aiCallsPerMonth;
+    case 'users': {
+      const limit = limits.maxUsers;
+      // -1 means unlimited
+      if (limit === -1) return false;
+      return (usage.usersCount || 0) >= limit;
+    }
+    case 'projects': {
+      const limit = limits.maxProjects;
+      if (limit === -1) return false;
+      return (usage.projectsCount || 0) >= limit;
+    }
+    case 'storage': {
+      const limit = limits.storageLimitMB;
+      if (limit === -1) return false;
+      return (usage.storageUsedMB || 0) >= limit;
+    }
+    case 'aiCalls': {
+      const limit = limits.aiCallsPerMonth;
+      if (limit === -1) return false;
+      return (usage.aiCallsThisMonth || 0) >= limit;
+    }
     default:
       return false;
   }
