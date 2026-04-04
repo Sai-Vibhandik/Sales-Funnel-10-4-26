@@ -21,6 +21,7 @@ import {
   Globe2,
   CreditCard,
 } from 'lucide-react';
+import growthValleyLogo from '@/assets/growth-valley-logo.webp';
 
 // Role labels for display
 const roleLabels = {
@@ -205,9 +206,11 @@ const isNavItemActive = (item) => {
       <div className="flex items-center justify-between h-16 px-4 border-b border-dark-200">
         {!collapsed && (
           <Link to={homeLink} className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-dark-300 font-bold text-lg">G</span>
-            </div>
+            <img
+              src={growthValleyLogo}
+              alt="Growth Valley"
+              className="w-9 h-9 rounded-xl object-cover shadow-lg"
+            />
             <div>
               <span className="font-bold text-white text-lg">Growth</span>
               <span className="font-bold text-primary-500 text-lg ml-1">Valley</span>
@@ -215,9 +218,11 @@ const isNavItemActive = (item) => {
           </Link>
         )}
         {collapsed && (
-          <div className="w-9 h-9 mx-auto bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
-            <span className="text-dark-300 font-bold text-lg">G</span>
-          </div>
+          <img
+            src={growthValleyLogo}
+            alt="Growth Valley"
+            className="w-9 h-9 mx-auto rounded-xl object-cover shadow-lg"
+          />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}

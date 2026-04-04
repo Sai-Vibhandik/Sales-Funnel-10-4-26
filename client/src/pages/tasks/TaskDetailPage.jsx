@@ -95,6 +95,9 @@ export default function TaskDetailPage() {
   const [showPromptDropdown, setShowPromptDropdown] = useState(false);
   const promptDropdownRef = useRef(null);
 
+  // Approved content state (for graphic designers and video editors to paste content)
+  const [approvedContent, setApprovedContent] = useState('');
+
   // Get the back URL from location state, default based on user role
   const getBackUrl = () => {
     // If we have a 'from' state, use it
@@ -239,7 +242,8 @@ export default function TaskDetailPage() {
       const response = await aiService.generateBrief({
         taskId: task._id,
         frameworkType: selectedFramework,
-        promptId: selectedPrompt?._id || null
+        promptId: selectedPrompt?._id || null,
+        approvedContent: approvedContent || null
       });
 
       setAiBrief(response.data.contentBrief);
@@ -263,7 +267,8 @@ export default function TaskDetailPage() {
 
       const response = await aiService.regenerateBrief(task._id, {
         frameworkType: selectedFramework,
-        promptId: selectedPrompt?._id || null
+        promptId: selectedPrompt?._id || null,
+        approvedContent: approvedContent || null
       });
 
       setAiBrief(response.data.contentBrief);
@@ -1246,6 +1251,37 @@ export default function TaskDetailPage() {
                           </button>
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Approved Content - Only for Graphic Designers and Video Editors */}
+                {['graphic_designer', 'video_editor'].includes(user?.role) && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Approved Content (from Content Planner)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Paste the approved headline, body text, CTA, and script from the content link you received
+                    </p>
+                    <textarea
+                      value={approvedContent}
+                      onChange={(e) => setApprovedContent(e.target.value)}
+                      placeholder="Paste approved content here...
+
+Example:
+Headline: Get 50% Off Today!
+Body: Transform your business with our AI solution...
+CTA: Click Here Now
+Script: (for video) Opening hook..."
+                      rows={6}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm resize-none"
+                    />
+                    {approvedContent && (
+                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        {approvedContent.length} characters - will be included in prompt
+                      </p>
                     )}
                   </div>
                 )}

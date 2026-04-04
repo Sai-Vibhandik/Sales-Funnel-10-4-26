@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { Button, Input, Card, CardBody, Spinner } from '@/components/ui';
 import { Check, ArrowLeft } from 'lucide-react';
+import growthValleyLogo from '@/assets/growth-valley-logo.webp';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -162,9 +163,11 @@ export default function RegisterPage() {
         </Link>
 
         <div className="text-center mb-8">
-          <div className="mx-auto w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-white font-bold text-xl">GV</span>
-          </div>
+          <img
+            src={growthValleyLogo}
+            alt="Growth Valley"
+            className="mx-auto w-16 h-16 rounded-xl object-cover shadow-lg mb-4"
+          />
           <h1 className="text-3xl font-bold text-gray-900">Create Your Account</h1>
           <p className="mt-2 text-gray-600">Join Growth Valley and get your dedicated marketing team</p>
         </div>

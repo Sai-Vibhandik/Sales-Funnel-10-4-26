@@ -51,22 +51,28 @@ async function getStrategySummary(projectId) {
       painPoints: marketResearch.painPoints,
       desires: marketResearch.desires,
       existingPurchases: marketResearch.existingPurchases,
-      competitors: marketResearch.competitors
+      competitors: marketResearch.competitors,
+      visionBoard: marketResearch.visionBoard,
+      strategySheet: marketResearch.strategySheet,
+      isCompleted: marketResearch.isCompleted,
+      completedAt: marketResearch.completedAt
     };
   }
 
   // Offer
   if (offer) {
     summary.offer = {
-      functionalValue: offer.functionalValue,
-      emotionalValue: offer.emotionalValue,
-      socialValue: offer.socialValue,
-      economicValue: offer.economicValue,
-      experientialValue: offer.experientialValue,
+      functionalValues: offer.functionalValues,
+      emotionalValues: offer.emotionalValues,
+      socialValues: offer.socialValues,
+      economicValues: offer.economicValues,
+      experientialValues: offer.experientialValues,
       bonuses: offer.bonuses,
       guarantees: offer.guarantees,
       urgencyTactics: offer.urgencyTactics,
-      pricing: offer.pricing
+      pricing: offer.pricing,
+      isCompleted: offer.isCompleted,
+      completedAt: offer.completedAt
     };
   }
 
@@ -76,27 +82,50 @@ async function getStrategySummary(projectId) {
       channels: trafficStrategy.channels,
       hooks: trafficStrategy.hooks,
       targetAudience: trafficStrategy.targetAudience,
-      totalBudget: trafficStrategy.totalBudget
+      totalBudget: trafficStrategy.totalBudget,
+      isCompleted: trafficStrategy.isCompleted,
+      completedAt: trafficStrategy.completedAt
     };
   }
 
   // Landing Page
   if (landingPage) {
     summary.landingPage = {
+      name: landingPage.name,
       type: landingPage.type,
-      leadCapture: landingPage.leadCapture,
-      nurturing: landingPage.nurturing,
+      funnelType: landingPage.funnelType,
+      hook: landingPage.hook,
+      angle: landingPage.angle,
+      platform: landingPage.platform,
+      cta: landingPage.cta,
+      ctaText: landingPage.ctaText,
+      offer: landingPage.offer,
+      messaging: landingPage.messaging,
       headline: landingPage.headline,
       subheadline: landingPage.subheadline,
-      ctaText: landingPage.ctaText
+      leadCaptureMethod: landingPage.leadCaptureMethod,
+      leadCapture: landingPage.leadCapture,
+      nurturing: landingPage.nurturing,
+      designPreferences: landingPage.designPreferences,
+      seoSettings: landingPage.seoSettings,
+      isCompleted: landingPage.isCompleted,
+      completedAt: landingPage.completedAt
     };
   }
 
   // Creative Strategy
   if (creativeStrategy) {
     summary.creativeStrategy = {
+      creativePlan: creativeStrategy.creativePlan,
+      creativeCategories: creativeStrategy.creativeCategories,
       adTypes: creativeStrategy.adTypes,
-      additionalNotes: creativeStrategy.additionalNotes
+      stages: creativeStrategy.stages,
+      totalCreatives: creativeStrategy.totalCreatives,
+      creativeBrief: creativeStrategy.creativeBrief,
+      brandGuidelines: creativeStrategy.brandGuidelines,
+      additionalNotes: creativeStrategy.additionalNotes,
+      isCompleted: creativeStrategy.isCompleted,
+      completedAt: creativeStrategy.completedAt
     };
   }
 

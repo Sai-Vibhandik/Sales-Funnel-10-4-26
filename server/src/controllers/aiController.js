@@ -8,7 +8,7 @@ const { getFrameworkTemplate } = require('../utils/frameworkTemplates');
 // @access  Private (Content Writer)
 exports.generateContentBrief = async (req, res, next) => {
   try {
-    const { taskId, frameworkType, promptId } = req.body;
+    const { taskId, frameworkType, promptId, approvedContent } = req.body;
 
     // Validate required fields
     if (!taskId || !frameworkType) {
@@ -110,6 +110,9 @@ exports.generateContentBrief = async (req, res, next) => {
       painPoints: task.strategyContext?.painPoints || [],
       desires: task.strategyContext?.desires || [],
       avatar: task.strategyContext?.avatar || {},
+
+      // Approved content from Content Planner (for graphic designers and video editors)
+      approvedContent: approvedContent || '',
     };
 
     // Generate the content brief
@@ -168,7 +171,7 @@ exports.generateContentBrief = async (req, res, next) => {
 exports.regenerateContentBrief = async (req, res, next) => {
   try {
     const { taskId } = req.params;
-    const { frameworkType, promptId } = req.body;
+    const { frameworkType, promptId, approvedContent } = req.body;
 
     // Get the task
     const task = await Task.findOne({
@@ -255,6 +258,9 @@ exports.regenerateContentBrief = async (req, res, next) => {
       painPoints: task.strategyContext?.painPoints || [],
       desires: task.strategyContext?.desires || [],
       avatar: task.strategyContext?.avatar || {},
+
+      // Approved content from Content Planner (for graphic designers and video editors)
+      approvedContent: approvedContent || '',
     };
 
     // Generate new content brief
@@ -369,12 +375,12 @@ exports.getAIProviders = async (req, res, next) => {
         description: 'Google Gemini 2.5 Flash model',
         requiresApiKey: true
       },
-      // {
-      //   value: 'openai',
-      //   label: 'OpenAI',
-      //   description: 'GPT-3.5/GPT-4 models',
-      //   requiresApiKey: true
-      // },
+      {
+        value: 'openai',
+        label: 'OpenAI',
+        description: 'GPT-3.5/GPT-4 models',
+        requiresApiKey: true
+      },
       // {
       //   value: 'hypereal',
       //   label: 'Hypereal AI',
@@ -409,12 +415,12 @@ exports.getAIProviders = async (req, res, next) => {
 exports.setAIProvider = async (req, res, next) => {
   try {
     const { provider } = req.body;
-    const validProviders = ['ollama', 'gemini'];
+    const validProviders = ['ollama', 'gemini', 'openai'];
 
     if (!provider || !validProviders.includes(provider)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid provider. Must be one of: ollama, gemini'
+        message: 'Invalid provider. Must be one of: ollama, gemini , openai'
       });
     }
 

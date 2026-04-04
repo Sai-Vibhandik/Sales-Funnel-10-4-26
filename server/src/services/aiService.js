@@ -506,6 +506,15 @@ function buildContentBriefPrompt(framework, frameworkTemplate, context) {
     prompt += `Type: ${context.taskType}\n`;
   }
 
+  // Approved Content (for Graphic Designers and Video Editors)
+  if (context.approvedContent && context.approvedContent.trim()) {
+    prompt += `\n\n*** APPROVED CONTENT (MUST USE THIS EXACT CONTENT) ***\n`;
+    prompt += `======================================================\n\n`;
+    prompt += `The following content has been approved by the Content Planner. You MUST incorporate this exact content into your design brief:\n\n`;
+    prompt += context.approvedContent;
+    prompt += `\n\n*** END APPROVED CONTENT ***\n`;
+  }
+
   prompt += `\n\nGENERATE THE CONTENT BRIEF NOW using the ${framework} framework structure. Make sure all placeholders are replaced with actual content from the context above.`;
 
   return prompt;
