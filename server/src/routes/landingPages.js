@@ -12,25 +12,19 @@ const {
 } = require('../controllers/landingPageController');
 const { protect, authorize } = require('../middleware/auth');
 
-// All routes are protected and require admin or performance_marketer role
+// All routes are protected
 router.use(protect);
-router.use(authorize('admin', 'performance_marketer'));
 
-// Landing page CRUD routes
-router.route('/:projectId')
-  .get(getLandingPages)                    // List all landing pages for project
-  .post(createLandingPage);                // Create new landing page
+// GET routes - Admin can view (read-only)
+router.get('/:projectId', authorize('admin', 'performance_marketer'), getLandingPages);
+router.get('/:projectId/:landingPageId', authorize('admin', 'performance_marketer'), getLandingPage);
 
-router.route('/:projectId/:landingPageId')
-  .get(getLandingPage)                     // Get single landing page
-  .put(updateLandingPage)                  // Update landing page
-  .delete(deleteLandingPage);              // Delete landing page
-
-// Complete landing page and generate tasks
-router.post('/:projectId/:landingPageId/complete', completeLandingPage);
-
-// Nurturing routes (now require landingPageId)
-router.post('/:projectId/:landingPageId/nurturing', addNurturing);
-router.delete('/:projectId/:landingPageId/nurturing/:nurturingId', removeNurturing);
+// POST/PUT/DELETE routes - Only performance_marketer can edit
+router.post('/:projectId', authorize('performance_marketer'), createLandingPage);
+router.put('/:projectId/:landingPageId', authorize('performance_marketer'), updateLandingPage);
+router.delete('/:projectId/:landingPageId', authorize('performance_marketer'), deleteLandingPage);
+router.post('/:projectId/:landingPageId/complete', authorize('performance_marketer'), completeLandingPage);
+router.post('/:projectId/:landingPageId/nurturing', authorize('performance_marketer'), addNurturing);
+router.delete('/:projectId/:landingPageId/nurturing/:nurturingId', authorize('performance_marketer'), removeNurturing);
 
 module.exports = router;

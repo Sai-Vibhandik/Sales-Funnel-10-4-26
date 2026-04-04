@@ -44,7 +44,15 @@ export function CheckoutModal({
     setError(null);
 
     try {
-      const result = await billingService.createCheckout({
+      // Use createInitialCheckout if no organization (for new users during onboarding)
+      // Use createCheckout if organization exists (for existing org admins)
+      const hasOrganization = organization && organization._id;
+
+      const checkoutFn = hasOrganization
+        ? billingService.createCheckout
+        : billingService.createInitialCheckout;
+
+      const result = await checkoutFn({
         planId: plan._id || plan.id,
         billingPeriod,
         provider
@@ -69,7 +77,7 @@ export function CheckoutModal({
     } finally {
       setIsLoading(false);
     }
-  }, [plan, billingPeriod, provider, isOpen]);
+  }, [plan, billingPeriod, provider, isOpen, organization]);
 
   // Initialize Razorpay checkout
   const initializeRazorpay = (data) => {

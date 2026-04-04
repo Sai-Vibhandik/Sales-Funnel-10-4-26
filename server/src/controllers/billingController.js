@@ -939,10 +939,155 @@ const verifyCheckout = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Create initial checkout session (for new users without organization)
+ * @route   POST /api/billing/initial-checkout
+ * @access  Private (authenticated, no organization required)
+ */
+const createInitialCheckout = async (req, res) => {
+  try {
+    const { planId, billingPeriod = 'monthly', provider } = req.body;
+    const userId = req.user._id;
+    const userEmail = req.user.email;
+    const userName = req.user.name;
+
+    // Validate plan
+    const plan = await Plan.findById(planId);
+    if (!plan || !plan.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid plan selected'
+      });
+    }
+
+    // Determine provider
+    const billingProvider = provider || BillingService.getDefaultProvider(plan.currency?.code || 'INR');
+
+    if (!billingProvider) {
+      return res.status(400).json({
+        success: false,
+        message: 'No billing provider configured'
+      });
+    }
+
+    // Calculate amount
+    const amount = billingPeriod === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+    const currency = plan.currency?.code || 'INR';
+
+    if (billingProvider === 'razorpay') {
+      // Create Razorpay order
+      const RazorpayService = BillingService.getProvider('razorpay');
+
+      if (!RazorpayService || !RazorpayService.isConfigured()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Razorpay is not configured'
+        });
+      }
+
+      // Create order for one-time payment (for initial subscription)
+      const order = await RazorpayService.createOrder(
+        null, // No organization yet
+        plan,
+        billingPeriod
+      );
+
+      res.json({
+        success: true,
+        data: {
+          provider: 'razorpay',
+          orderId: order.id,
+          amount: order.amount,
+          currency: order.currency,
+          keyId: process.env.RAZORPAY_KEY_ID,
+          prefill: {
+            name: userName,
+            email: userEmail
+          },
+          plan: {
+            id: plan._id,
+            name: plan.name,
+            slug: plan.slug,
+            amount,
+            currency,
+            billingPeriod
+          }
+        }
+      });
+    } else if (billingProvider === 'stripe') {
+      // Create Stripe checkout session
+      const StripeService = BillingService.getProvider('stripe');
+
+      if (!StripeService || !StripeService.isConfigured()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Stripe is not configured'
+        });
+      }
+
+      // Create customer first
+      const customer = await StripeService.createCustomer({
+        email: userEmail,
+        name: userName
+      });
+
+      // Create checkout session
+      const priceId = billingPeriod === 'yearly' ? plan.yearlyStripePriceId : plan.monthlyStripePriceId;
+
+      const session = await StripeService.stripeClient.checkout.sessions.create({
+        customer: customer.id,
+        payment_method_types: ['card'],
+        line_items: [{
+          price: priceId,
+          quantity: 1
+        }],
+        mode: 'subscription',
+        success_url: `${process.env.CLIENT_URL}/onboarding?session_id={CHECKOUT_SESSION_ID}&success=true`,
+        cancel_url: `${process.env.CLIENT_URL}/onboarding?canceled=true`,
+        metadata: {
+          userId: userId.toString(),
+          planId: plan._id.toString(),
+          planSlug: plan.slug,
+          billingPeriod
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          provider: 'stripe',
+          sessionId: session.id,
+          url: session.url,
+          plan: {
+            id: plan._id,
+            name: plan.name,
+            slug: plan.slug,
+            amount,
+            currency,
+            billingPeriod
+          }
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Unsupported payment provider'
+      });
+    }
+  } catch (error) {
+    console.error('Create initial checkout error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create checkout session'
+    });
+  }
+};
+
 module.exports = {
   getPlans,
   getSubscription,
   createCheckout,
+  createInitialCheckout,
   cancelSubscription,
   reactivateSubscription,
   upgradePlan,

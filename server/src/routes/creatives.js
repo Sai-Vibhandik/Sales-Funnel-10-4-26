@@ -15,29 +15,21 @@ const {
 const { protect, authorize } = require('../middleware/auth');
 const { checkStageAccess } = require('../middleware/stageGating');
 
-// All routes are protected and require admin or performance_marketer role
+// All routes are protected
 router.use(protect);
-router.use(authorize('admin', 'performance_marketer'));
 
-// Creative strategy routes - require landingPage stage to be completed
-router.route('/:projectId')
-  .get(checkStageAccess('creativeStrategy'), getCreativeStrategy)
-  .post(checkStageAccess('creativeStrategy'), upsertCreativeStrategy);
+// GET routes - Admin can view (read-only)
+router.get('/:projectId', authorize('admin', 'performance_marketer'), checkStageAccess('creativeStrategy'), getCreativeStrategy);
 
-// Generate creative cards
-router.post('/:projectId/generate', checkStageAccess('creativeStrategy'), generateCreativeCards);
-
-// Ad type routes
-router.post('/:projectId/ad-types', checkStageAccess('creativeStrategy'), addAdType);
-router.put('/:projectId/ad-types/:typeKey', checkStageAccess('creativeStrategy'), updateAdType);
-router.delete('/:projectId/ad-types/:typeKey', checkStageAccess('creativeStrategy'), removeAdType);
-
-// Additional notes
-router.put('/:projectId/notes', checkStageAccess('creativeStrategy'), updateAdditionalNotes);
-
-// Creative item routes
-router.post('/:projectId/stages/:stage/creatives', checkStageAccess('creativeStrategy'), addCreative);
-router.put('/:projectId/stages/:stage/creatives/:creativeId', checkStageAccess('creativeStrategy'), updateCreative);
-router.delete('/:projectId/stages/:stage/creatives/:creativeId', checkStageAccess('creativeStrategy'), deleteCreative);
+// POST/PUT/DELETE routes - Only performance_marketer can edit
+router.post('/:projectId', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), upsertCreativeStrategy);
+router.post('/:projectId/generate', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), generateCreativeCards);
+router.post('/:projectId/ad-types', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), addAdType);
+router.put('/:projectId/ad-types/:typeKey', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), updateAdType);
+router.delete('/:projectId/ad-types/:typeKey', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), removeAdType);
+router.put('/:projectId/notes', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), updateAdditionalNotes);
+router.post('/:projectId/stages/:stage/creatives', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), addCreative);
+router.put('/:projectId/stages/:stage/creatives/:creativeId', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), updateCreative);
+router.delete('/:projectId/stages/:stage/creatives/:creativeId', authorize('performance_marketer'), checkStageAccess('creativeStrategy'), deleteCreative);
 
 module.exports = router;

@@ -102,19 +102,9 @@ export default function OnboardingPage() {
 
   // Check if plan is paid (requires payment)
   const isPaidPlan = selectedPlan && (
-    (selectedPlan.monthlyPrice !== undefined && selectedPlan.monthlyPrice > 0) ||
-    (selectedPlan.yearlyPrice !== undefined && selectedPlan.yearlyPrice > 0)
+    (typeof selectedPlan.monthlyPrice === 'number' && selectedPlan.monthlyPrice > 0) ||
+    (typeof selectedPlan.yearlyPrice === 'number' && selectedPlan.yearlyPrice > 0)
   );
-
-  // Debug: Log plan data
-  useEffect(() => {
-    if (selectedPlan) {
-      console.log('Selected Plan:', selectedPlan);
-      console.log('Is Paid Plan:', isPaidPlan);
-      console.log('Monthly Price:', selectedPlan.monthlyPrice);
-      console.log('Yearly Price:', selectedPlan.yearlyPrice);
-    }
-  }, [selectedPlan, isPaidPlan]);
 
   const handleCreateOrganization = async (data) => {
     // If it's a paid plan, show checkout modal instead of creating directly
@@ -128,19 +118,33 @@ export default function OnboardingPage() {
     await createOrganization(data);
   };
 
-  const createOrganization = async (data) => {
+  const createOrganization = async (data, paymentData = null) => {
     setLoading(true);
     try {
-      const response = await organizationService.createOrganization({
+      const payload = {
         name: data.name,
         description: data.description,
         planId: selectedPlan?.id || selectedPlan?._id || null,
         planName: selectedPlan?.name || 'Free',
-      });
+        billingCycle: selectedPlan?.billingCycle || 'monthly',
+      };
+
+      // Include payment data if available (for paid plans)
+      if (paymentData) {
+        payload.payment = {
+          orderId: paymentData.razorpay_order_id || paymentData.orderId,
+          paymentId: paymentData.razorpay_payment_id || paymentData.paymentId,
+          signature: paymentData.razorpay_signature || paymentData.signature,
+          provider: 'razorpay', // Default to razorpay for now
+        };
+      }
+
+      const response = await organizationService.createOrganization(payload);
 
       if (response && response.success) {
         toast.success('Organization created successfully! Redirecting...');
         localStorage.removeItem('user');
+        sessionStorage.removeItem('selectedPlan'); // Clean up
         setTimeout(() => {
           window.location.href = '/';
         }, 1000);
@@ -162,7 +166,7 @@ export default function OnboardingPage() {
     toast.success('Payment successful! Creating your organization...');
 
     if (organizationData) {
-      await createOrganization(organizationData);
+      await createOrganization(organizationData, paymentData);
     }
   };
 
@@ -211,7 +215,7 @@ export default function OnboardingPage() {
                       <p className="font-semibold text-primary-600">{selectedPlan.name}</p>
                       {selectedPlan.monthlyPrice > 0 && (
                         <p className="text-sm text-gray-500">
-                          ₹{selectedPlan.price}/{selectedPlan.billingCycle === 'monthly' ? 'month' : 'year'}
+                          {selectedPlan.currency?.symbol || '₹'}{selectedPlan.price}/{selectedPlan.billingCycle === 'monthly' ? 'month' : 'year'}
                         </p>
                       )}
                       {selectedPlan.monthlyPrice === 0 && (

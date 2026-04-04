@@ -87,8 +87,16 @@ export default function RegisterPage() {
         id: selectedPlan._id,
         _id: selectedPlan._id,
         name: selectedPlan.displayName || selectedPlan.name,
+        slug: selectedPlan.slug,
+        tier: selectedPlan.tier,
+        monthlyPrice: selectedPlan.monthlyPrice || 0,
+        yearlyPrice: selectedPlan.yearlyPrice || 0,
         price: billingCycle === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice,
         billingCycle: billingCycle,
+        currency: selectedPlan.currency,
+        limits: selectedPlan.limits,
+        features: selectedPlan.features,
+        trialDays: selectedPlan.trialDays || 0,
       } : null;
 
       // Store selected plan in sessionStorage to survive redirects
@@ -171,7 +179,7 @@ export default function RegisterPage() {
                   <div>
                     <h3 className="font-semibold text-gray-900">Selected Plan: {selectedPlan.displayName || selectedPlan.name}</h3>
                     <p className="text-sm text-gray-500">
-                      ₹{billingCycle === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice} / {billingCycle === 'monthly' ? 'month' : 'year'}
+                      {selectedPlan.currency?.symbol || '₹'}{billingCycle === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice} / {billingCycle === 'monthly' ? 'month' : 'year'}
                     </p>
                   </div>
                   <Link
@@ -315,7 +323,9 @@ export default function RegisterPage() {
                         )}
                         <h3 className="font-semibold text-gray-900">{planDisplayName}</h3>
                         <div className="mt-2">
-                          <span className="text-2xl font-bold text-gray-900">₹{price}</span>
+                          <span className="text-2xl font-bold text-gray-900">
+                            {price === 0 ? 'Free' : `${plan.currency?.symbol || '₹'}${price}`}
+                          </span>
                           <span className="text-gray-500 text-sm">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
                         </div>
                         <div className="mt-3 space-y-1">

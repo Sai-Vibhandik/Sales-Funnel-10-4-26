@@ -6,6 +6,7 @@ const {
   getPlans,
   getSubscription,
   createCheckout,
+  createInitialCheckout,
   cancelSubscription,
   reactivateSubscription,
   upgradePlan,
@@ -29,6 +30,22 @@ router.get('/plans', getPlans);
 
 // All other routes require authentication
 router.use(protect);
+
+/**
+ * @desc    Create initial checkout session (for new organizations without org context)
+ * @route   POST /api/billing/initial-checkout
+ * @access  Private (authenticated, no org required)
+ */
+router.post('/initial-checkout', createInitialCheckout);
+
+/**
+ * @desc    Verify checkout success (for new organizations)
+ * @route   POST /api/billing/verify-initial-checkout
+ * @access  Private (authenticated, no org required)
+ */
+router.post('/verify-initial-checkout', verifyCheckout);
+
+// Routes below require organization context
 router.use(setTenantContext);
 router.use(requireOrganization);
 
@@ -66,13 +83,6 @@ router.get('/payment-methods', requireOrgAdmin, getPaymentMethods);
  * @access  Private (requires org admin)
  */
 router.post('/checkout', requireOrgAdmin, createCheckout);
-
-/**
- * @desc    Verify checkout success
- * @route   POST /api/billing/verify-checkout
- * @access  Private (requires organization)
- */
-router.post('/verify-checkout', verifyCheckout);
 
 /**
  * @desc    Cancel subscription

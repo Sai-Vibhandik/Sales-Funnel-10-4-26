@@ -70,8 +70,8 @@ const planSchema = new mongoose.Schema({
 
   // Currency
   currency: {
-    code: { type: String, default: 'USD' },
-    symbol: { type: String, default: '$' }
+    code: { type: String, default: 'INR' },
+    symbol: { type: String, default: '₹' }
   },
 
   // Limits

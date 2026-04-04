@@ -154,7 +154,9 @@ function TeamMemberRow({ member, onEdit, onDelete, onActivate, index = 0 }) {
       )}
     >
       {/* Fixed grid: avatar | info | role | specialization | status | actions */}
-      <div className="grid items-center gap-3" style={{ gridTemplateColumns: '44px 1fr 180px 1fr auto auto' }}>
+      <div className="grid items-center gap-3" style={{ gridTemplateColumns: '44px 1fr 180px auto auto' }}> 
+        {/* {{ gridTemplateColumns: '44px 1fr 180px 1fr auto auto' }} removed 1fr of specialization column  */}
+        
 
         {/* Avatar */}
         <div className="relative flex-shrink-0">
@@ -197,11 +199,11 @@ function TeamMemberRow({ member, onEdit, onDelete, onActivate, index = 0 }) {
         </div>
 
         {/* Specialization */}
-        <div className="hidden xl:block min-w-0">
+        {/* <div className="hidden xl:block min-w-0">
           <span className="text-sm text-gray-500 truncate block">
             {member.specialization || <span className="text-gray-400 italic">Not specified</span>}
           </span>
-        </div>
+        </div> */}
 
         {/* Status */}
         <div className="flex-shrink-0">

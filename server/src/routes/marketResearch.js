@@ -36,17 +36,15 @@ const upload = multer({
   }
 });
 
-// All routes are protected and require admin or performance_marketer role
+// All routes are protected
 router.use(protect);
-router.use(authorize('admin', 'performance_marketer'));
 
-// Market research routes
-router.route('/:projectId')
-  .get(getMarketResearch)
-  .post(upsertMarketResearch);
+// GET routes - Admin can view (read-only)
+router.get('/:projectId', authorize('admin', 'performance_marketer'), getMarketResearch);
 
-// File upload routes
-router.post('/:projectId/vision-board', upload.single('file'), uploadVisionBoard);
-router.post('/:projectId/strategy-sheet', upload.single('file'), uploadStrategySheet);
+// POST/PUT routes - Only performance_marketer can edit
+router.post('/:projectId', authorize('performance_marketer'), upsertMarketResearch);
+router.post('/:projectId/vision-board', authorize('performance_marketer'), upload.single('file'), uploadVisionBoard);
+router.post('/:projectId/strategy-sheet', authorize('performance_marketer'), upload.single('file'), uploadStrategySheet);
 
 module.exports = router;

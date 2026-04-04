@@ -585,41 +585,27 @@ export default function ProjectDetailPage() {
         </>
       )}
 
-      {/* Admin Workflow Stages - Admin can edit all stages including Landing Page and Creative Strategy */}
+      {/* Admin Workflow Stages - Admin can only VIEW stages (read-only) */}
       {isAdmin && (
         <>
-          <h2 className="text-lg font-semibold text-gray-900">Workflow Stages (Admin)</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Workflow Stages</h2>
+          <p className="text-sm text-gray-500 mb-4">View strategy progress (managed by Performance Marketer)</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {stages.slice(1).map((stage, index) => {
               const Icon = STAGE_ICONS[stage.key] || CheckCircle;
-              const isAccessible = stage.isAccessible;
               const isCompleted = stage.isCompleted;
 
               return (
                 <Card
                   key={stage.key}
-                  className={`relative overflow-hidden transition-all ${
-                    isAccessible ? 'hover:shadow-md cursor-pointer' : 'opacity-60'
-                  }`}
-                  onClick={() => {
-                    if (isAccessible) {
-                      navigate(`${STAGE_PATHS[stage.key]}?projectId=${id}`);
-                    }
-                  }}
+                  className="relative overflow-hidden"
                 >
-                  {!isAccessible && (
-                    <div className="absolute top-2 right-2">
-                      <Lock className="w-5 h-5 text-gray-400" />
-                    </div>
-                  )}
                   <CardBody className="p-6">
                     <div className="flex items-start gap-4">
                       <div
                         className={`p-3 rounded-lg ${
                           isCompleted
                             ? 'bg-green-100 text-green-600'
-                            : isAccessible
-                            ? 'bg-primary-100 text-primary-600'
                             : 'bg-gray-100 text-gray-400'
                         }`}
                       >
@@ -635,17 +621,17 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-gray-500 mt-1">
                           Stage {stage.order} of 6
                         </p>
-                        {isAccessible && !isCompleted && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {isCompleted ? 'Completed' : 'Not started'}
+                        </p>
+                        {isCompleted && (
                           <Button
-                            variant="secondary"
+                            variant="outline"
                             size="sm"
                             className="mt-3"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`${STAGE_PATHS[stage.key]}?projectId=${id}`);
-                            }}
+                            onClick={() => navigate(`/dashboard/projects/${id}/strategy-summary`)}
                           >
-                            Continue
+                            View Summary
                           </Button>
                         )}
                       </div>
@@ -668,7 +654,7 @@ export default function ProjectDetailPage() {
             </h3>
             <p className="text-gray-600 mb-4">
               As an admin, you manage customer onboarding and team assignments.
-              Strategy stages (Market Research, Offer Engineering, etc.) are handled by your team.
+              Strategy stages are created by Performance Marketers. You can view completed strategies but cannot edit them.
             </p>
             <div className="flex justify-center gap-3">
               <Button

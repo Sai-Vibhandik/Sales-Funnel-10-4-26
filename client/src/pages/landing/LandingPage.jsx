@@ -42,6 +42,28 @@ export default function LandingPage() {
   const [searchParams] = useSearchParams();
   const hasRedirected = useRef(false);
 
+  // Smooth scroll function
+  const smoothScrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offsetTop = element.offsetTop - 80; // 80px offset for fixed header
+      window.scrollTo({
+        top: offsetTop,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Handle navigation click
+  const handleNavClick = (e, sectionId) => {
+    e.preventDefault();
+    smoothScrollToSection(sectionId);
+    // Close mobile menu if open
+    if (mobileMenuOpen) {
+      setMobileMenuOpen(false);
+    }
+  };
+
   // Redirect authenticated users with organization to dashboard
   useEffect(() => {
     if (!hasRedirected.current && isAuthenticated && !authLoading && user?.currentOrganization) {
@@ -185,19 +207,42 @@ export default function LandingPage() {
 
             {/* Desktop Menu */}
             <div className="hidden md:flex items-center space-x-8">
-              {['Features', 'How it Works', 'Pricing'].map((item, index) => (
-                <motion.a
-                  key={item}
-                  href={`#${item.toLowerCase().replace(/ /g, '-')}`}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className="text-gray-300 hover:text-white transition relative group cursor-pointer"
-                >
-                  {item}
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-500 transition-all duration-300 group-hover:w-full"></span>
-                </motion.a>
-              ))}
+              <motion.a
+                key="features"
+                href="#features"
+                onClick={(e) => handleNavClick(e, 'features')}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="text-gray-300 hover:text-white transition relative group cursor-pointer"
+              >
+                Features
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-500 transition-all duration-300 group-hover:w-full"></span>
+              </motion.a>
+              <motion.a
+                key="how-it-works"
+                href="#how-it-works"
+                onClick={(e) => handleNavClick(e, 'how-it-works')}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="text-gray-300 hover:text-white transition relative group cursor-pointer"
+              >
+                How it Works
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-500 transition-all duration-300 group-hover:w-full"></span>
+              </motion.a>
+              <motion.a
+                key="pricing"
+                href="#pricing"
+                onClick={(e) => handleNavClick(e, 'pricing')}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="text-gray-300 hover:text-white transition relative group cursor-pointer"
+              >
+                Pricing
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary-500 transition-all duration-300 group-hover:w-full"></span>
+              </motion.a>
             </div>
 
             <div className="hidden md:flex items-center space-x-4">
@@ -218,12 +263,13 @@ export default function LandingPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
               >
-                <Link
-                  to="/register"
+                <a
+                  href="#pricing"
+                  onClick={(e) => handleNavClick(e, 'pricing')}
                   className="bg-primary-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-700 transition shadow-lg shadow-primary-500/25 cursor-pointer"
                 >
                   Start Free Trial
-                </Link>
+                </a>
               </motion.div>
             </div>
 
@@ -247,16 +293,27 @@ export default function LandingPage() {
               className="md:hidden bg-gray-900/95 backdrop-blur-xl border-b border-gray-800"
             >
               <div className="px-4 py-4 space-y-3">
-                {['Features', 'How it Works', 'Pricing'].map((item) => (
-                  <a
-                    key={item}
-                    href={`#${item.toLowerCase().replace(/ /g, '-')}`}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block text-gray-300 hover:text-white py-2 transition"
-                  >
-                    {item}
-                  </a>
-                ))}
+                <a
+                  href="#features"
+                  onClick={(e) => handleNavClick(e, 'features')}
+                  className="block text-gray-300 hover:text-white py-2 transition"
+                >
+                  Features
+                </a>
+                <a
+                  href="#how-it-works"
+                  onClick={(e) => handleNavClick(e, 'how-it-works')}
+                  className="block text-gray-300 hover:text-white py-2 transition"
+                >
+                  How it Works
+                </a>
+                <a
+                  href="#pricing"
+                  onClick={(e) => handleNavClick(e, 'pricing')}
+                  className="block text-gray-300 hover:text-white py-2 transition"
+                >
+                  Pricing
+                </a>
                 <Link
                   to="/login"
                   onClick={() => setMobileMenuOpen(false)}
@@ -264,13 +321,13 @@ export default function LandingPage() {
                 >
                   Log in
                 </Link>
-                <Link
-                  to="/register"
-                  onClick={() => setMobileMenuOpen(false)}
+                <a
+                  href="#pricing"
+                  onClick={(e) => handleNavClick(e, 'pricing')}
                   className="block bg-primary-600 text-white px-4 py-2 rounded-lg text-center"
                 >
                   Start Free Trial
-                </Link>
+                </a>
               </div>
             </motion.div>
           )}
@@ -328,17 +385,19 @@ export default function LandingPage() {
               className="mt-10 flex flex-col sm:flex-row gap-4 justify-center"
             >
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Link
-                  to="/register"
+                <a
+                  href="#pricing"
+                  onClick={(e) => handleNavClick(e, 'pricing')}
                   className="inline-flex items-center justify-center px-8 py-4 bg-primary-600 text-white rounded-lg font-semibold text-lg hover:bg-primary-700 transition shadow-lg shadow-primary-500/25"
                 >
-                  Start 14-Day Free Trial
+                  Start Now
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition" />
-                </Link>
+                </a>
               </motion.div>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <a
                   href="#features"
+                  onClick={(e) => handleNavClick(e, 'features')}
                   className="inline-flex items-center justify-center px-8 py-4 bg-gray-800 text-white rounded-lg font-semibold text-lg border border-gray-700 hover:bg-gray-750 transition"
                 >
                   Watch Demo
@@ -550,13 +609,14 @@ export default function LandingPage() {
                 Join thousands of businesses using GrowthValley
               </p>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Link
-                  to="/register"
+                <a
+                  href="#pricing"
+                  onClick={(e) => handleNavClick(e, 'pricing')}
                   className="inline-flex items-center justify-center px-8 py-4 bg-white text-primary-600 rounded-lg font-semibold text-lg hover:bg-gray-100 transition shadow-lg"
                 >
                   Start Free Trial
                   <ArrowRight className="ml-2 w-5 h-5" />
-                </Link>
+                </a>
               </motion.div>
             </div>
           </motion.div>
@@ -581,8 +641,8 @@ export default function LandingPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#features" className="text-gray-400 hover:text-white transition">Features</a></li>
-                <li><a href="#pricing" className="text-gray-400 hover:text-white transition">Pricing</a></li>
+                <li><a href="#features" onClick={(e) => handleNavClick(e, 'features')} className="text-gray-400 hover:text-white transition cursor-pointer">Features</a></li>
+                <li><a href="#pricing" onClick={(e) => handleNavClick(e, 'pricing')} className="text-gray-400 hover:text-white transition cursor-pointer">Pricing</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition">API</a></li>
               </ul>
             </div>
@@ -672,6 +732,7 @@ function PricingCard({ plan, index, billingCycle, features, onSelect, isHovered,
   const price = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
   const isPopular = plan.badge?.text || plan.name?.toLowerCase().includes('pro') || plan.name?.toLowerCase().includes('enterprise');
   const planDisplayName = plan.displayName || plan.name;
+  const currencySymbol = plan.currency?.symbol || '₹';
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true });
 
@@ -716,12 +777,14 @@ function PricingCard({ plan, index, billingCycle, features, onSelect, isHovered,
             transition={{ duration: 0.3 }}
             className="text-5xl font-bold text-white"
           >
-            ₹{price || 0}
+            {price === 0 ? 'Free' : `${currencySymbol}${price}`}
           </motion.span>
-          <span className="text-gray-400">/{billingCycle === 'monthly' ? 'month' : 'year'}</span>
+          {price > 0 && (
+            <span className="text-gray-400">/{billingCycle === 'monthly' ? 'month' : 'year'}</span>
+          )}
           {billingCycle === 'yearly' && plan.monthlyPrice > 0 && plan.yearlyPrice > 0 && (
             <div className="text-sm text-green-400 font-medium mt-1">
-              Save ₹{(plan.monthlyPrice * 12) - (plan.yearlyPrice || 0)}/year
+              Save {currencySymbol}{(plan.monthlyPrice * 12) - (plan.yearlyPrice || 0)}/year
             </div>
           )}
         </div>

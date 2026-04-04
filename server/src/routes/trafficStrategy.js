@@ -9,20 +9,16 @@ const {
 } = require('../controllers/trafficStrategyController');
 const { protect, authorize } = require('../middleware/auth');
 
-// All routes are protected and require admin or performance_marketer role
+// All routes are protected
 router.use(protect);
-router.use(authorize('admin', 'performance_marketer'));
 
-// Traffic strategy routes
-router.route('/:projectId')
-  .get(getTrafficStrategy)
-  .post(upsertTrafficStrategy);
+// GET routes - Admin can view (read-only)
+router.get('/:projectId', authorize('admin', 'performance_marketer'), getTrafficStrategy);
 
-// Hook routes
-router.post('/:projectId/hooks', addHook);
-router.delete('/:projectId/hooks/:hookId', removeHook);
-
-// Channel routes
-router.patch('/:projectId/channels/:channelName', toggleChannel);
+// POST/PUT/PATCH/DELETE routes - Only performance_marketer can edit
+router.post('/:projectId', authorize('performance_marketer'), upsertTrafficStrategy);
+router.post('/:projectId/hooks', authorize('performance_marketer'), addHook);
+router.delete('/:projectId/hooks/:hookId', authorize('performance_marketer'), removeHook);
+router.patch('/:projectId/channels/:channelName', authorize('performance_marketer'), toggleChannel);
 
 module.exports = router;

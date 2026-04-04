@@ -40,10 +40,16 @@ export const billingService = {
   // ==========================================
 
   /**
-   * Create checkout session for plan subscription
+   * Create checkout session for plan subscription (requires organization)
    * @param {Object} data - { planId, billingPeriod, provider }
    */
   createCheckout: (data) => api.post('/billing/checkout', data),
+
+  /**
+   * Create initial checkout session (for new users without organization)
+   * @param {Object} data - { planId, billingPeriod, provider }
+   */
+  createInitialCheckout: (data) => api.post('/billing/initial-checkout', data),
 
   /**
    * Verify checkout completion
@@ -169,12 +175,17 @@ export const billingService = {
  * Helper function to format currency
  */
 export const formatCurrency = (amount, currency = 'USD') => {
-  // Amount is in cents, convert to dollars
-  const value = typeof amount === 'number' ? amount / 100 : parseFloat(amount) / 100;
-  return new Intl.NumberFormat('en-US', {
+  // For INR, prices are stored as whole rupees (not paise)
+  // For USD, prices are stored in cents
+  const isInr = currency === 'INR';
+  const value = isInr
+    ? (typeof amount === 'number' ? amount : parseFloat(amount))
+    : (typeof amount === 'number' ? amount / 100 : parseFloat(amount) / 100);
+
+  return new Intl.NumberFormat(isInr ? 'en-IN' : 'en-US', {
     style: 'currency',
     currency,
-    minimumFractionDigits: 2
+    minimumFractionDigits: isInr ? 0 : 2
   }).format(value);
 };
 

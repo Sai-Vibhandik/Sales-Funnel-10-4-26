@@ -467,7 +467,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Prompts Management (Admin only) */}
+        {/* Prompts - View only for org admins, full access for platform admin */}
         <Route
           path="prompts"
           element={
@@ -503,6 +503,16 @@ function AppRoutes() {
           element={
             <PlatformAdminRoute>
               <PlatformAdminDashboardPage />
+            </PlatformAdminRoute>
+          }
+        />
+
+        {/* Prompts Management - Platform Admin only */}
+        <Route
+          path="platform-admin/prompts"
+          element={
+            <PlatformAdminRoute>
+              <PromptsPage />
             </PlatformAdminRoute>
           }
         />

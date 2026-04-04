@@ -617,6 +617,29 @@ const RazorpayService = {
       console.error('Razorpay get subscription error:', error);
       throw error;
     }
+  },
+
+  /**
+   * Verify payment signature
+   * Verifies that the payment was made to Razorpay and is legitimate
+   */
+  verifyPayment({ orderId, paymentId, signature }) {
+    if (!this.isConfigured()) throw new Error('Razorpay not configured');
+
+    try {
+      // Create the signature using the order_id and payment_id
+      const payload = `${orderId}|${paymentId}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', RAZORPAY_KEY_SECRET)
+        .update(payload)
+        .digest('hex');
+
+      // Compare signatures
+      return expectedSignature === signature;
+    } catch (error) {
+      console.error('Razorpay payment verification error:', error);
+      return false;
+    }
   }
 };
 

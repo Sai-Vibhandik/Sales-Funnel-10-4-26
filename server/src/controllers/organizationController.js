@@ -7,6 +7,7 @@ const Subscription = require('../models/Subscription');
 const UsageLog = require('../models/UsageLog');
 const Plan = require('../models/Plan');
 const { DEFAULT_PLANS, getPlanLimits, getPlanFeatures } = require('../config/plans');
+const { BillingService } = require('../services/billingService');
 
 /**
  * Organization Controller
@@ -31,12 +32,13 @@ exports.createOrganization = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { name, description, planId, planName } = req.body;
+    const { name, description, planId, planName, billingCycle, payment } = req.body;
     const userId = req.user._id;
 
     // Look up the plan by ID to get limits and features
     let plan = null;
     let actualPlanName = planName || 'Free';
+    let isPaidPlan = false;
 
     if (planId) {
       try {
@@ -44,10 +46,53 @@ exports.createOrganization = async (req, res) => {
         if (plan) {
           // Use displayName if available, otherwise use name
           actualPlanName = plan.displayName || plan.name;
+          // Check if it's a paid plan
+          isPaidPlan = (plan.monthlyPrice > 0 || plan.yearlyPrice > 0);
         }
       } catch (err) {
         console.error('Plan lookup error:', err);
       }
+    }
+
+    // If it's a paid plan, verify payment
+    if (isPaidPlan && payment) {
+      try {
+        // Verify payment with provider
+        if (payment.provider === 'razorpay') {
+          const RazorpayService = BillingService.getProvider('razorpay');
+          if (RazorpayService && RazorpayService.isConfigured()) {
+            // Verify payment signature
+            const isValid = await RazorpayService.verifyPayment({
+              orderId: payment.orderId,
+              paymentId: payment.paymentId,
+              signature: payment.signature
+            });
+
+            if (!isValid) {
+              await session.abortTransaction();
+              return res.status(400).json({
+                success: false,
+                message: 'Payment verification failed. Please try again.'
+              });
+            }
+          }
+        }
+        // For Stripe, payment is verified via webhook, so we trust the sessionId
+      } catch (verifyError) {
+        console.error('Payment verification error:', verifyError);
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: 'Payment verification failed. Please contact support.'
+        });
+      }
+    } else if (isPaidPlan && !payment) {
+      // Paid plan but no payment data
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Payment is required for this plan.'
+      });
     }
 
     // Get plan limits and features from the plan document or use defaults
@@ -90,17 +135,28 @@ exports.createOrganization = async (req, res) => {
     const nanoSuffix = process.hrtime ? process.hrtime.bigint().toString(36).slice(-4) : '';
     const slug = `${baseSlug}-${timestamp}-${randomSuffix}${nanoSuffix}`;
 
+    // Determine subscription status
+    const subscriptionStatus = isPaidPlan ? 'active' : 'active';
+    const subscriptionProvider = payment?.provider || 'none';
+
     // Create organization
     const organization = new Organization({
       name,
       slug,
       description,
-      plan: actualPlanName, // Store plan name instead of tier
+      plan: plan?.slug || actualPlanName.toLowerCase(),
       planName: actualPlanName,
       planLimits,
       features: planFeatures,
       owner: userId,
-      createdBy: userId
+      createdBy: userId,
+      subscriptionStatus,
+      subscriptionProvider,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + (billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000),
+      // Store payment IDs if paid plan
+      razorpayOrderId: payment?.orderId || undefined,
+      razorpayPaymentId: payment?.paymentId || undefined
     });
 
     await organization.save({ session });
@@ -116,18 +172,24 @@ exports.createOrganization = async (req, res) => {
       invitedBy: userId
     }], { session });
 
-    // Create default subscription record
-    await Subscription.create([{
+    // Create subscription record
+    const subscriptionData = {
       organizationId: org._id,
-      provider: 'none',
-      plan: actualPlanName,
-      planName: org.planName,
+      provider: subscriptionProvider,
+      plan: plan?.slug || actualPlanName.toLowerCase(),
+      planName: actualPlanName,
       planLimits,
       features: planFeatures,
-      amount: 0,
-      currency: 'USD',
-      status: 'active' // All plans start as active for now
-    }], { session });
+      status: subscriptionStatus,
+      billingCycle: billingCycle || 'monthly',
+      // Always set amount (0 for free plans)
+      amount: isPaidPlan && plan
+        ? (billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice)
+        : 0,
+      currency: plan?.currency?.code || 'INR'
+    };
+
+    await Subscription.create([subscriptionData], { session });
 
     // Set user as admin (first user to create org becomes admin)
     // Also set their current organization
