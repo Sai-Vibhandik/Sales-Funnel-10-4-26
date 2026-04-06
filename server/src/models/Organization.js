@@ -255,9 +255,8 @@ organizationSchema.statics.findByUser = function(userId) {
   });
 };
 
-// Indexes (slug index is already created by unique: true in schema)
-organizationSchema.index({ stripeCustomerId: 1 }, { sparse: true });
-organizationSchema.index({ razorpayCustomerId: 1 }, { sparse: true });
+// Indexes
+// Note: stripeCustomerId and razorpayCustomerId already have unique: true in schema definition
 organizationSchema.index({ owner: 1 });
 organizationSchema.index({ isActive: 1, isSuspended: 1 });
 organizationSchema.index({ 'subscriptionStatus': 1, 'currentPeriodEnd': 1 });

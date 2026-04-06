@@ -198,7 +198,7 @@ const planSchema = new mongoose.Schema({
 });
 
 // Indexes
-planSchema.index({ slug: 1 }, { unique: true });
+// Note: slug already has unique: true in schema definition
 planSchema.index({ tier: 1, isActive: 1 });
 planSchema.index({ isPublic: 1, isActive: 1 });
 planSchema.index({ sortOrder: 1 });

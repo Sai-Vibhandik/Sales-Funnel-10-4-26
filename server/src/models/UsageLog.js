@@ -15,8 +15,7 @@ const usageLogSchema = new mongoose.Schema({
   organizationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Organization',
-    required: true,
-    index: true
+    required: true
   },
 
   // User who performed the action
@@ -217,8 +216,7 @@ const usageLogSchema = new mongoose.Schema({
   // Timestamp
   createdAt: {
     type: Date,
-    default: Date.now,
-    expires: 365 // Auto-delete after 1 year (can be adjusted)
+    default: Date.now
   }
 }, {
   timestamps: false // Only use createdAt

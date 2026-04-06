@@ -684,8 +684,8 @@ function FeatureCard({ icon: Icon, title, description, index }) {
       initial={{ opacity: 0, y: 50 }}
       animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
-      whileHover={{ scale: 1.05, y: -5 }}
-      className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 hover:border-primary-500/50 transition-all duration-300"
+      whileHover={{ scale: 1.05, y: -5, transition: { duration: 0.2, ease: 'easeOut' } }}
+      className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 hover:border-primary-500/50"
     >
       <motion.div
         whileHover={{ rotate: 360 }}
@@ -741,10 +741,10 @@ function PricingCard({ plan, index, billingCycle, features, onSelect, isHovered,
       initial={{ opacity: 0, y: 50 }}
       animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
-      whileHover={{ y: -10 }}
+      whileHover={{ y: -10, transition: { duration: 0.2, ease: 'easeOut' } }}
       onHoverStart={() => onHover(plan._id)}
       onHoverEnd={() => onHover(null)}
-      className={`relative bg-gray-800/50 backdrop-blur-sm rounded-2xl flex flex-col border transition-all duration-300 ${
+      className={`relative bg-gray-800/50 backdrop-blur-sm rounded-2xl flex flex-col border ${
         isPopular ? 'border-primary-500 shadow-lg shadow-primary-500/25' : 'border-gray-700 hover:border-primary-500/50'
       }`}
     >
@@ -833,8 +833,8 @@ function TestimonialCard({ name, role, content, index }) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
-      whileHover={{ y: -5 }}
-      className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 hover:border-primary-500/50 transition-all duration-300"
+      whileHover={{ y: -5, transition: { duration: 0.2, ease: 'easeOut' } }}
+      className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 hover:border-primary-500/50"
     >
       <div className="flex items-center gap-1 mb-4">
         {[...Array(5)].map((_, i) => (
