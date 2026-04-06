@@ -5,7 +5,7 @@ import { SocketProvider } from '@/context/SocketContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { ProjectProvider } from '@/context/ProjectContext';
 import { Layout } from '@/components/layout';
-import { SpeedInsights } from "@vercel/speed-insights/react"
+
 
 // Landing page
 import { LandingPage } from '@/pages/landing';
@@ -548,7 +548,6 @@ export default function App() {
         <AppRoutes />
         <Toaster position="top-right" richColors />
       </AuthProvider>
-       <SpeedInsights />
     </BrowserRouter>
   );
 }
