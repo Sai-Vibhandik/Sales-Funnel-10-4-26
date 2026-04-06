@@ -118,11 +118,21 @@ export default function OnboardingPage() {
 
   const handleCreateOrganization = async (data) => {
     // If it's a paid plan, show checkout modal instead of creating directly
-    if (isPaidPlan) {
-      setOrganizationData(data);
-      setShowCheckout(true);
-      return;
-    }
+   if (isPaidPlan) {
+  // ✅ Save data for refresh safety
+  sessionStorage.setItem(
+    "checkoutData",
+    JSON.stringify({
+      organizationData: data,
+      selectedPlan: selectedPlan,
+    })
+  );
+
+  // ✅ Navigate to checkout page
+  navigate(`/checkout?plan=${selectedPlan._id}`);
+
+  return;
+}
 
     // Free plan - create organization directly
     await createOrganization(data);

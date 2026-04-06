@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { promptService, frameworkCategoryService } from '@/services/api';
 import { Card, CardBody, Button, Input, Modal } from '@/components/ui';
 import { PenTool, Plus, Edit2, Trash2, X, Search, Power, Eye, Cpu, Sparkles, ChevronDown, ChevronRight, BookOpen, Tag } from 'lucide-react';
@@ -501,6 +502,9 @@ Analyze the inputs and generate the most effective content:`
 };
 
 export default function PromptsPage() {
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.role === 'platform_admin';
+
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -800,10 +804,12 @@ export default function PromptsPage() {
               </span>
             </div>
           )} */}
-          <Button onClick={openAddModal}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Prompt
-          </Button>
+          {isPlatformAdmin && (
+            <Button onClick={openAddModal}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Prompt
+            </Button>
+          )}
         </div>
       </div>
 
@@ -855,7 +861,7 @@ export default function PromptsPage() {
               <p className="text-gray-500 mb-4">
                 {searchTerm || filterRole ? 'Try different search criteria' : 'Get started by creating your first prompt template'}
               </p>
-              {!searchTerm && !filterRole && (
+              {!searchTerm && !filterRole && isPlatformAdmin && (
                 <Button onClick={openAddModal}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Prompt
@@ -955,9 +961,13 @@ export default function PromptsPage() {
                                         </div>
                                         <div className="flex gap-1">
                                           <button onClick={() => setViewPrompt(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                                          <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
-                                          <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`} title={prompt.isActive ? 'Deactivate' : 'Activate'}><Power className="w-3.5 h-3.5" /></button>
-                                          <button onClick={() => setDeleteConfirm(prompt)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                          {isPlatformAdmin && (
+                                            <>
+                                              <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                                              <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`} title={prompt.isActive ? 'Deactivate' : 'Activate'}><Power className="w-3.5 h-3.5" /></button>
+                                              <button onClick={() => setDeleteConfirm(prompt)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                            </>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -1003,9 +1013,13 @@ export default function PromptsPage() {
                                   </div>
                                   <div className="flex gap-1">
                                     <button onClick={() => setViewPrompt(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`} title={prompt.isActive ? 'Deactivate' : 'Activate'}><Power className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => setDeleteConfirm(prompt)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    {isPlatformAdmin && (
+                                      <>
+                                        <button onClick={() => openEditModal(prompt)} className="p-1 text-gray-400 hover:text-primary-600 rounded" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                                        <button onClick={() => handleToggleActive(prompt)} className={`p-1 rounded ${prompt.isActive ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`} title={prompt.isActive ? 'Deactivate' : 'Activate'}><Power className="w-3.5 h-3.5" /></button>
+                                        <button onClick={() => setDeleteConfirm(prompt)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1102,27 +1116,31 @@ export default function PromptsPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => openEditModal(prompt)}
-                              className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleActive(prompt)}
-                              className={`p-1.5 rounded hover:bg-gray-100 ${prompt.isActive ? 'text-green-500 hover:text-green-600' : 'text-gray-400 hover:text-green-500'}`}
-                              title={prompt.isActive ? 'Deactivate' : 'Activate'}
-                            >
-                              <Power className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(prompt)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {isPlatformAdmin && (
+                              <>
+                                <button
+                                  onClick={() => openEditModal(prompt)}
+                                  className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded"
+                                  title="Edit"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleToggleActive(prompt)}
+                                  className={`p-1.5 rounded hover:bg-gray-100 ${prompt.isActive ? 'text-green-500 hover:text-green-600' : 'text-gray-400 hover:text-green-500'}`}
+                                  title={prompt.isActive ? 'Deactivate' : 'Activate'}
+                                >
+                                  <Power className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(prompt)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
 
