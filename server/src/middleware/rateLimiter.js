@@ -74,7 +74,7 @@ const orgCreationLimiter = rateLimit({
     message: 'Too many organizations created. Please try again later.',
     code: 'ORG_CREATE_RATE_LIMIT'
   },
-  keyGenerator: (req) => req.user?._id || req.ip,
+  // Use default key generator (IP-based) for simplicity
   // Skip OPTIONS requests (CORS preflight)
   skip: (req) => req.method === 'OPTIONS'
 });
@@ -93,7 +93,7 @@ const invitationLimiter = rateLimit({
     message: 'Too many team invitations. Please try again later.',
     code: 'INVITATION_RATE_LIMIT'
   },
-  keyGenerator: (req) => `invite:${req.organizationId || req.ip}`,
+  // Use default key generator (IP-based) for simplicity
   // Skip OPTIONS requests (CORS preflight)
   skip: (req) => req.method === 'OPTIONS'
 });

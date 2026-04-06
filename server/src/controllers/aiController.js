@@ -37,7 +37,7 @@ exports.generateContentBrief = async (req, res, next) => {
     // Get the task with populated project
     const task = await Task.findOne({
       _id: taskId,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     })
       .populate('projectId', 'projectName businessName industry');
 
@@ -52,8 +52,9 @@ exports.generateContentBrief = async (req, res, next) => {
     const isAssignedUser = task.assignedTo?.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
     const isPerformanceMarketer = req.user.role === 'performance_marketer';
+    const isContentWriter = req.user.role === 'content_writer' || req.user.role === 'content_creator';
 
-    if (!isAssignedUser && !isAdmin && !isPerformanceMarketer) {
+    if (!isAssignedUser && !isAdmin && !isPerformanceMarketer && !isContentWriter) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this task'
@@ -176,7 +177,7 @@ exports.regenerateContentBrief = async (req, res, next) => {
     // Get the task
     const task = await Task.findOne({
       _id: taskId,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     })
       .populate('projectId', 'projectName businessName industry');
 
@@ -192,8 +193,9 @@ exports.regenerateContentBrief = async (req, res, next) => {
     const isAdmin = req.user.role === 'admin';
     const isPerformanceMarketer = req.user.role === 'performance_marketer';
     const isGraphicDesigner = req.user.role === 'graphic_designer';
+    const isContentWriter = req.user.role === 'content_writer' || req.user.role === 'content_creator';
 
-    if (!isAssignedUser && !isAdmin && !isPerformanceMarketer && !isGraphicDesigner) {
+    if (!isAssignedUser && !isAdmin && !isPerformanceMarketer && !isGraphicDesigner && !isContentWriter) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this task'

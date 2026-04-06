@@ -129,7 +129,10 @@ exports.getMyTasks = async (req, res, next) => {
   try {
     const { status, taskType, projectId } = req.query;
 
-    const query = { assignedTo: req.user._id };
+    const query = {
+      assignedTo: req.user._id,
+      organizationId: req.organizationId
+    };
     if (status) query.status = status;
     if (taskType) query.taskType = taskType;
     if (projectId) query.projectId = projectId;
@@ -229,7 +232,7 @@ exports.createTask = async (req, res, next) => {
 
     const task = await Task.create({
       projectId,
-      organizationId: req.user.currentOrganization,
+      organizationId: req.organizationId,
       taskType,
       assetType,
       taskTitle,
@@ -255,7 +258,7 @@ exports.createTask = async (req, res, next) => {
         title: 'New Task Assigned',
         message: `You have been assigned a new task: "${taskTitle}" for project "${projectDisplay}"`,
         projectId,
-        organizationId: req.user.currentOrganization
+        organizationId: req.organizationId
       });
     }
 
@@ -540,7 +543,7 @@ exports.updateTask = async (req, res, next) => {
 
     // Notify tester when task is submitted
     if (['submitted', 'content_submitted', 'design_submitted', 'development_submitted'].includes(status)) {
-      await notifyTesterForReview(task, req.user.currentOrganization);
+      await notifyTesterForReview(task, req.organizationId);
     }
 
     res.status(200).json({
@@ -642,7 +645,7 @@ exports.testerReview = async (req, res, next) => {
       // Need to get project team to find the correct team member
       const project = await Project.findOne({
         _id: task.projectId._id || task.projectId,
-        organizationId: req.user.currentOrganization
+        organizationId: req.organizationId
       })
         .populate('assignedTeam.contentWriters', '_id name')
         .populate('assignedTeam.graphicDesigners', '_id name')
@@ -742,7 +745,7 @@ exports.testerReview = async (req, res, next) => {
         title: approved ? 'Task Approved by Tester' : 'Task Rejected',
         message: notificationMessage,
         projectId: task.projectId?._id || task.projectId,
-        organizationId: req.user.currentOrganization
+        organizationId: req.organizationId
       });
     }
 
@@ -912,7 +915,7 @@ exports.testerReview = async (req, res, next) => {
           if (!assignedMember) {
             const project = await Project.findOne({
               _id: task.projectId._id || task.projectId,
-              organizationId: req.user.currentOrganization
+              organizationId: req.organizationId
             })
               .populate('assignedTeam.graphicDesigners', '_id name')
               .populate('assignedTeam.videoEditors', '_id name')
@@ -958,7 +961,7 @@ exports.testerReview = async (req, res, next) => {
               title: 'Approved Content Ready',
               message: `The content for "${task.taskTitle}" has been approved and is ready for ${isVideoTask ? 'video editing' : 'design'}. You can now view the approved content.`,
               projectId: task.projectId._id || task.projectId,
-              organizationId: req.user.currentOrganization
+              organizationId: req.organizationId
             });
             console.log('✓ Notification sent to assigned designer/editor');
           }
@@ -997,7 +1000,7 @@ exports.testerReview = async (req, res, next) => {
       } else {
         const project = await Project.findOne({
           _id: task.projectId._id || task.projectId,
-          organizationId: req.user.currentOrganization
+          organizationId: req.organizationId
         })
           .populate('assignedTeam.developers', '_id name')
           .populate('assignedTeam.developer', '_id name');
@@ -1031,7 +1034,7 @@ exports.testerReview = async (req, res, next) => {
             title: 'Landing Page Ready for Development',
             message: `The landing page design for "${project?.projectName || project?.businessName || 'a project'}" is approved and ready for development.`,
             projectId: task.projectId._id || task.projectId,
-            organizationId: req.user.currentOrganization
+            organizationId: req.organizationId
           });
         }
       }
@@ -1124,7 +1127,7 @@ exports.marketerReview = async (req, res, next) => {
       // Need to get project team to find the correct team member
       const project = await Project.findOne({
         _id: task.projectId._id || task.projectId,
-        organizationId: req.user.currentOrganization
+        organizationId: req.organizationId
       })
         .populate('assignedTeam.graphicDesigners', '_id name')
         .populate('assignedTeam.videoEditors', '_id name')
@@ -1207,7 +1210,7 @@ exports.marketerReview = async (req, res, next) => {
       try {
         const project = await Project.findOne({
           _id: task.projectId._id || task.projectId,
-          organizationId: req.user.currentOrganization
+          organizationId: req.organizationId
         });
 
         if (project && !project.stages.landingPage.isCompleted) {
@@ -1230,7 +1233,7 @@ exports.marketerReview = async (req, res, next) => {
         title: approved ? (task.status === 'content_final_approved' ? 'Content Approved - Ready for Design' : 'Task Fully Approved') : 'Task Rejected',
         message: notificationMessage,
         projectId: task.projectId?._id || task.projectId,
-        organizationId: req.user.currentOrganization
+        organizationId: req.organizationId
       });
     }
 
@@ -1241,7 +1244,7 @@ exports.marketerReview = async (req, res, next) => {
       } else {
         const project = await Project.findOne({
           _id: task.projectId._id || task.projectId,
-          organizationId: req.user.currentOrganization
+          organizationId: req.organizationId
         })
           .populate('assignedTeam.graphicDesigners', '_id name')
           .populate('assignedTeam.videoEditors', '_id name')
@@ -1297,7 +1300,7 @@ exports.marketerReview = async (req, res, next) => {
             title: 'New Design Task Ready',
             message: `Content for "${task.taskTitle}" is approved and ready for ${isVideoTask ? 'video editing' : 'design'}.`,
             projectId: task.projectId._id || task.projectId,
-            organizationId: req.user.currentOrganization
+            organizationId: req.organizationId
           });
         } else if (targetTeamMember) {
           // No matching design task found, but still notify the designer
@@ -1307,7 +1310,7 @@ exports.marketerReview = async (req, res, next) => {
             title: 'New Design Task',
             message: `Content for "${task.projectId?.projectName || task.projectId?.businessName || 'a project'}" is approved and ready for ${isVideoTask ? 'video editing' : 'design'}.`,
             projectId: task.projectId._id || task.projectId,
-            organizationId: req.user.currentOrganization
+            organizationId: req.organizationId
           });
         }
       }
@@ -1320,7 +1323,7 @@ exports.marketerReview = async (req, res, next) => {
       } else {
         const project = await Project.findOne({
           _id: task.projectId._id || task.projectId,
-          organizationId: req.user.currentOrganization
+          organizationId: req.organizationId
         })
           .populate('assignedTeam.developers', '_id name')
           .populate('assignedTeam.developer', '_id name');
@@ -1362,7 +1365,7 @@ exports.marketerReview = async (req, res, next) => {
               title: 'Landing Page Ready for Development',
               message: `The design for "${task.projectId?.projectName || task.projectId?.businessName || 'a project'}" has been approved and is ready for development.`,
               projectId: task.projectId._id || task.projectId,
-              organizationId: req.user.currentOrganization
+              organizationId: req.organizationId
             });
           }
         }
@@ -1426,7 +1429,7 @@ exports.assignTask = async (req, res, next) => {
         title: 'New Task Assigned',
         message: `You have been assigned to task: "${task.taskTitle}" for project "${projectDisplay}"`,
         projectId: task.projectId._id,
-        organizationId: req.user.currentOrganization
+        organizationId: req.organizationId
       });
     }
 
@@ -1503,13 +1506,44 @@ exports.getPendingReviewTasks = async (req, res, next) => {
       });
     }
 
-    // Use centralized SUBMITTED_STATUSES from constants
-    const tasks = await Task.find({
+    // Debug logging
+    console.log('=== getPendingReviewTasks ===');
+    console.log('User:', req.user._id, 'Role:', req.user.role);
+    console.log('OrganizationId:', req.organizationId);
+
+    // Build base query - always filter by organization
+    const baseQuery = {
+      organizationId: req.organizationId,
       status: { $in: SUBMITTED_STATUSES }
-    })
+    };
+
+    let query;
+
+    if (req.user.role === 'admin') {
+      // Admins can see all pending tasks within their organization
+      query = baseQuery;
+      console.log('Admin query - showing all org tasks');
+    } else {
+      // Testers can only see tasks assigned to them
+      query = {
+        ...baseQuery,
+        testerId: req.user._id
+      };
+      console.log('Tester query - only showing tasks assigned to tester:', req.user._id);
+    }
+
+    console.log('Query:', JSON.stringify(query, null, 2));
+
+    const tasks = await Task.find(query)
       .populate('projectId', 'projectName businessName industry')
       .populate('assignedTo', 'name email role')
+      .populate('testerId', 'name email')
       .sort({ submittedAt: 1 });
+
+    console.log('Found tasks:', tasks.length);
+    tasks.forEach(t => {
+      console.log(`Task ${t._id}: org=${t.organizationId}, testerId=${t.testerId?._id || t.testerId || 'null'}, status=${t.status}`);
+    });
 
     // Filter out tasks where project was deleted
     const validTasks = tasks.filter(task => task.projectId !== null);
@@ -1572,20 +1606,69 @@ exports.getPendingMarketerApproval = async (req, res, next) => {
 // @access  Private (Tester, Admin, Performance Marketer)
 exports.getApprovedAssets = async (req, res, next) => {
   try {
+    console.log('\n========== getApprovedAssets CALLED ==========');
+    console.log('User ID:', req.user._id);
+    console.log('User Role:', req.user.role);
+    console.log('Organization ID (req.organizationId):', req.organizationId);
+    console.log('Organization (req.organization):', req.organization?._id);
+    console.log('=============================================\n');
+
     // Get tasks that have been approved by tester or are fully approved
     // Use TESTER_APPROVED_STATUSES to include content_final_approved
     // Note: content_final_approved tasks don't go to marketer, but should show in approved assets
     const approvedStatuses = [...TESTER_APPROVED_STATUSES, ...FINAL_STATUSES];
 
-    const tasks = await Task.find({
+    // SECURITY: Ensure organizationId is set
+    if (!req.organizationId) {
+      console.error('[getApprovedAssets] ERROR: No organizationId set for user:', req.user._id);
+      return res.status(403).json({
+        success: false,
+        message: 'Organization context required'
+      });
+    }
+
+    // Build base query - always filter by organization
+    const baseQuery = {
+      organizationId: req.organizationId,
       status: { $in: approvedStatuses }
-    })
+    };
+
+    let query;
+
+    if (req.user.role === 'admin') {
+      // Admins see all approved tasks within their organization
+      query = baseQuery;
+    } else if (req.user.role === 'tester') {
+      // Testers see only tasks they reviewed
+      query = {
+        ...baseQuery,
+        testerReviewedBy: req.user._id
+      };
+    } else if (req.user.role === 'performance_marketer') {
+      // Performance marketers see only tasks assigned to them
+      query = {
+        ...baseQuery,
+        marketerId: req.user._id
+      };
+    } else {
+      // Other roles don't have access
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view approved assets'
+      });
+    }
+
+    console.log('[getApprovedAssets] Query:', JSON.stringify(query, null, 2));
+
+    const tasks = await Task.find(query)
       .populate('projectId', 'projectName businessName industry')
       .populate('assignedTo', 'name email role')
       .populate('assignedBy', 'name email')
       .populate('testerReviewedBy', 'name email')
       .populate('marketerApprovedBy', 'name email')
       .sort({ testerReviewedAt: -1, updatedAt: -1 });
+
+    console.log('[getApprovedAssets] Found tasks:', tasks.length);
 
     // Filter out tasks where project was deleted
     const validTasks = tasks.filter(task => task.projectId !== null);
@@ -1596,6 +1679,7 @@ exports.getApprovedAssets = async (req, res, next) => {
       data: validTasks
     });
   } catch (error) {
+    console.error('[getApprovedAssets] Error:', error);
     next(error);
   }
 };
@@ -1610,7 +1694,7 @@ exports.getProjectCompletedAssets = async (req, res, next) => {
     // Check project access
     const project = await Project.findOne({
       _id: projectId,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -1676,7 +1760,7 @@ exports.generateTasks = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: projectId,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -1724,7 +1808,7 @@ exports.getAllTasks = async (req, res, next) => {
   try {
     const { status, taskType, projectId } = req.query;
 
-    const query = {};
+    const query = { organizationId: req.organizationId };
     if (status) query.status = status;
     if (taskType) query.taskType = taskType;
     if (projectId) query.projectId = projectId;
@@ -1838,6 +1922,7 @@ exports.getTasksByRole = async (req, res, next) => {
   try {
     const { role } = req.params;
     const { status, projectId } = req.query;
+    const organizationId = req.organizationId;
 
     // Validate role
     const validRoles = [
@@ -1856,7 +1941,7 @@ exports.getTasksByRole = async (req, res, next) => {
     // For performance marketers, get tasks pending their approval
     // For other roles, get tasks assigned to them
 
-    let query = {};
+    let query = { organizationId }; // Always filter by organization
 
     // Role-specific status filters
     if (role === 'tester') {
@@ -1903,6 +1988,7 @@ exports.getMyRoleTasks = async (req, res, next) => {
   try {
     const { status, projectId } = req.query;
     const userRole = req.user.role;
+    const organizationId = req.organizationId;
 
     // Map user role to task assignedRole
     const roleMap = {
@@ -1925,15 +2011,16 @@ exports.getMyRoleTasks = async (req, res, next) => {
       });
     }
 
-    let query = {};
+    let query = { organizationId }; // Always filter by organization
 
     // Role-specific status filters
     if (assignedRole === 'tester') {
       // Testers see:
-      // 1. Tasks submitted for review (assigned to them)
+      // 1. Tasks submitted for review and assigned to them
       // 2. Tasks they have reviewed (approved or rejected)
       const userId = req.user._id;
       query = {
+        organizationId,
         $or: [
           // Currently pending review - assigned to this tester
           {
@@ -1953,6 +2040,7 @@ exports.getMyRoleTasks = async (req, res, next) => {
       // Marketer only reviews design_approved and development_approved tasks
       query.status = { $in: ['design_approved', 'development_approved'] };
       query.marketerId = req.user._id;
+      // organizationId already set above
     } else {
       // For creators, designers, developers - show their assigned tasks
       // Also include tasks where they were the original assignee (submitted tasks)
@@ -1978,6 +2066,7 @@ exports.getMyRoleTasks = async (req, res, next) => {
       if (status) {
         // Specific status filter requested
         query = {
+          organizationId,
           status: status,
           $or: [
             { assignedTo: userIdObjId },
@@ -1989,6 +2078,7 @@ exports.getMyRoleTasks = async (req, res, next) => {
       } else if (roleStatuses.length > 0) {
         // Show tasks with role-specific statuses that belong to this user
         query = {
+          organizationId,
           status: { $in: roleStatuses },
           $or: [
             { assignedTo: userIdObjId },
@@ -1999,6 +2089,7 @@ exports.getMyRoleTasks = async (req, res, next) => {
       } else {
         // Fallback
         query = {
+          organizationId,
           assignedRole: assignedRole,
           assignedTo: userIdObjId
         };
@@ -2139,10 +2230,13 @@ exports.getPMProjectsWithAssets = async (req, res, next) => {
       });
     }
 
-    // Get projects where user is assigned as performance marketer
+    // Get projects where user is assigned as performance marketer (within their organization)
     const projectQuery = req.user.role === 'admin'
-      ? {}
-      : { 'assignedTeam.performanceMarketers': req.user._id };
+      ? { organizationId: req.organizationId }
+      : {
+          organizationId: req.organizationId,
+          'assignedTeam.performanceMarketers': req.user._id
+        };
 
     const projects = await Project.find(projectQuery)
       .select('_id projectName businessName industry status isActive')
@@ -2249,7 +2343,7 @@ exports.getPMProjectAssets = async (req, res, next) => {
     // Check project access
     const project = await Project.findOne({
       _id: projectId,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -2361,11 +2455,42 @@ async function notifyTesterForReview(task, organizationId) {
     query.organizationId = orgId;
   }
   const project = await Project.findOne(query)
+    // New array fields
+    .populate('assignedTeam.testers', '_id name')
+    // Legacy single field
     .populate('assignedTeam.tester', '_id name');
 
-  if (project && project.assignedTeam.tester) {
+  if (!project) return;
+
+  // Collect all testers (from both new array and legacy field)
+  const testerIds = [];
+
+  // From new array field
+  if (project.assignedTeam?.testers && Array.isArray(project.assignedTeam.testers)) {
+    project.assignedTeam.testers.forEach(tester => {
+      if (tester && tester._id) {
+        testerIds.push(tester._id);
+      }
+    });
+  }
+
+  // From legacy single field (for backward compatibility)
+  if (project.assignedTeam?.tester && project.assignedTeam.tester._id) {
+    // Only add if not already in the list
+    if (!testerIds.some(id => id.toString() === project.assignedTeam.tester._id.toString())) {
+      testerIds.push(project.assignedTeam.tester._id);
+    }
+  }
+
+  // Also notify the specific tester assigned to the task (if set)
+  if (task.testerId && !testerIds.some(id => id.toString() === task.testerId.toString())) {
+    testerIds.push(task.testerId);
+  }
+
+  // Notify all testers
+  for (const testerId of testerIds) {
     await Notification.create({
-      recipient: project.assignedTeam.tester._id,
+      recipient: testerId,
       type: 'task_submitted',
       title: 'Task Ready for Review',
       message: `A task "${task.taskTitle}" has been submitted and is ready for your review.`,
@@ -2383,6 +2508,7 @@ exports.getTaskStats = async (req, res, next) => {
     const { role } = req.params;
     const userId = req.user._id;
     const userRole = req.user.role;
+    const organizationId = req.organizationId;
 
     // Validate role parameter
     const validRoles = ['content_writer', 'graphic_designer', 'developer', 'tester', 'performance_marketer', 'admin'];
@@ -2401,8 +2527,8 @@ exports.getTaskStats = async (req, res, next) => {
       });
     }
 
-    // Build query based on role
-    let query = {};
+    // Build query based on role - ALWAYS filter by organization
+    let query = { organizationId };
 
     // Map frontend role names to database assignedRole values
     const roleMap = {
@@ -2415,14 +2541,14 @@ exports.getTaskStats = async (req, res, next) => {
     };
 
     if (role === 'admin') {
-      // Admin sees all tasks
-      query = {};
+      // Admin sees all tasks within organization (already filtered above)
+      // query already has organizationId
     } else if (role === 'tester') {
-      // Tester sees tasks in submitted status for review
-      query = { status: { $in: SUBMITTED_STATUSES } };
+      // Tester sees tasks in submitted status for review within organization
+      query.status = { $in: SUBMITTED_STATUSES };
     } else {
-      // Other roles see tasks assigned to them
-      query = { assignedTo: userId };
+      // Other roles see tasks assigned to them within organization
+      query.assignedTo = userId;
     }
 
     // Get all relevant tasks
@@ -2493,8 +2619,9 @@ exports.getTaskStats = async (req, res, next) => {
         SUBMITTED_STATUSES.includes(t.status)
       ).length;
 
-      // Get approved/rejected counts from recently reviewed
+      // Get approved/rejected counts from recently reviewed (within organization)
       const recentlyReviewed = await Task.find({
+        organizationId,
         testerReviewedBy: userId,
         updatedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days
       });

@@ -1,6 +1,7 @@
 const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const Task = require('../models/Task');
+const Membership = require('../models/Membership');
 const { getStageStatus, completeStage } = require('../middleware/stageGating');
 const UsageService = require('../services/usageService');
 
@@ -55,7 +56,7 @@ exports.getProjects = async (req, res, next) => {
     console.log('User role type:', typeof req.user?.role);
 
     // Build query - always filter by organization first
-    let query = { organizationId: req.user.currentOrganization };
+    let query = { organizationId: req.organizationId };
 
     // If not admin, show projects where user is assigned or created by them
     if (req.user.role !== 'admin') {
@@ -164,7 +165,7 @@ exports.getProject = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     })
       .populate('createdBy', 'name email')
       .populate('client', 'customerName businessName email mobile industry address')
@@ -282,7 +283,7 @@ exports.createProject = async (req, res, next) => {
       description,
       budget,
       timeline,
-      organizationId: req.user.currentOrganization,
+      organizationId: req.organizationId,
       createdBy: req.user._id,
       stages: {
         onboarding: {
@@ -312,7 +313,7 @@ exports.createProject = async (req, res, next) => {
     await project.save();
 
     // Track usage - increment project count
-    await UsageService.trackUsage(req.user.currentOrganization, 'projects', 1);
+    await UsageService.trackUsage(req.organizationId, 'projects', 1);
 
     res.status(201).json({
       success: true,
@@ -346,7 +347,7 @@ exports.updateProject = async (req, res, next) => {
 
     let project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {
@@ -406,7 +407,7 @@ exports.deleteProject = async (req, res, next) => {
   try {
     const project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {
@@ -451,7 +452,7 @@ exports.deleteProject = async (req, res, next) => {
     await project.deleteOne();
 
     // Track usage - decrement project count
-    await UsageService.decreaseUsage(req.user.currentOrganization, 'projects', 1);
+    await UsageService.decreaseUsage(req.organizationId, 'projects', 1);
 
     res.status(200).json({
       success: true,
@@ -493,7 +494,7 @@ exports.assignTeam = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {
@@ -501,6 +502,42 @@ exports.assignTeam = async (req, res, next) => {
         success: false,
         message: 'Project not found'
       });
+    }
+
+    // Collect all user IDs to validate
+    const allUserIds = [
+      ...(performanceMarketers || []),
+      ...(contentWriters || []),
+      ...(uiUxDesigners || []),
+      ...(graphicDesigners || []),
+      ...(videoEditors || []),
+      ...(developers || []),
+      ...(testers || []),
+      performanceMarketer,
+      uiUxDesigner,
+      graphicDesigner,
+      developer,
+      tester
+    ].filter(Boolean);
+
+    // Validate that all team members belong to the same organization
+    if (allUserIds.length > 0) {
+      const validMemberships = await Membership.find({
+        userId: { $in: allUserIds },
+        organizationId: req.organizationId,
+        status: 'active'
+      }).select('userId');
+
+      const validUserIds = new Set(validMemberships.map(m => m.userId.toString()));
+      const invalidUsers = allUserIds.filter(id => !validUserIds.has(id.toString()));
+
+      if (invalidUsers.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Some team members do not belong to this organization or are not active',
+          invalidUsers
+        });
+      }
     }
 
     // Ensure performanceMarketers has at most one member
@@ -633,7 +670,7 @@ exports.toggleProjectActivation = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {
@@ -684,7 +721,7 @@ exports.uploadAssets = async (req, res, next) => {
   try {
     const project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {
@@ -746,7 +783,7 @@ exports.getAssignedProjects = async (req, res, next) => {
 
     // Build query - always filter by organization
     let query = {
-      organizationId: req.user.currentOrganization,
+      organizationId: req.organizationId,
       $or: [
         { 'assignedTeam.performanceMarketer': req.user._id },
         { 'assignedTeam.uiUxDesigner': req.user._id },
@@ -809,7 +846,7 @@ exports.getProjectProgress = async (req, res, next) => {
   try {
     const project = await Project.findOne({
       _id: req.params.id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {
@@ -846,7 +883,7 @@ exports.getProjectProgress = async (req, res, next) => {
 exports.getDashboardStats = async (req, res, next) => {
   try {
     // Build query based on user role - always filter by organization
-    let query = { organizationId: req.user.currentOrganization };
+    let query = { organizationId: req.organizationId };
 
     if (req.user.role !== 'admin') {
       // For non-admins, show assigned projects
@@ -926,7 +963,7 @@ exports.addLandingPage = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -985,7 +1022,7 @@ exports.getLandingPages = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -1029,7 +1066,7 @@ exports.getLandingPage = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -1065,7 +1102,7 @@ exports.updateLandingPage = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -1128,7 +1165,7 @@ exports.deleteLandingPage = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
     if (!project) {
       return res.status(404).json({
@@ -1177,7 +1214,7 @@ exports.completeLandingPageStage = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     })
       // New array fields
       .populate('assignedTeam.uiUxDesigners', '_id name email')
@@ -1369,7 +1406,7 @@ exports.skipLandingPageStage = async (req, res, next) => {
 
     const project = await Project.findOne({
       _id: id,
-      organizationId: req.user.currentOrganization
+      organizationId: req.organizationId
     });
 
     if (!project) {

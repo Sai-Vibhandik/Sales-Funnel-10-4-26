@@ -6,6 +6,7 @@ const MarketResearch = require('../models/MarketResearch');
 const Offer = require('../models/Offer');
 const TrafficStrategy = require('../models/TrafficStrategy');
 const CreativeStrategy = require('../models/Creative');
+const Membership = require('../models/Membership');
 
 // SOP References for different task types
 const SOP_REFERENCES = {
@@ -26,6 +27,24 @@ const TASK_ASSET_MAPPING = {
   landing_page_design: 'landing_page_design',
   landing_page_page: 'landing_page_development'
 };
+
+/**
+ * Verify that a user belongs to the specified organization
+ * @param {string} userId - User ID to verify
+ * @param {string} organizationId - Organization ID to check against
+ * @returns {Promise<boolean>}
+ */
+async function verifyUserBelongsToOrg(userId, organizationId) {
+  if (!userId || !organizationId) return false;
+
+  const membership = await Membership.findOne({
+    userId,
+    organizationId,
+    status: 'active'
+  });
+
+  return !!membership;
+}
 
 /**
  * Generate tasks automatically when a creative strategy is completed
@@ -170,7 +189,7 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
 
       // Only generate tasks if no tasks exist for this creative strategy
       if (existingPlanTaskKeys.size === 0) {
-        const creativePlanTasks = generateCreativePlanTasks(creativePlan, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+        const creativePlanTasks = await generateCreativePlanTasks(creativePlan, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
         tasks.push(...creativePlanTasks);
       } else {
         console.log(`Skipping creative plan tasks - ${existingPlanTaskKeys.size} tasks already exist for creative strategy`);
@@ -675,7 +694,7 @@ function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, st
  * Generate tasks from the new creative plan structure
  * Each creative plan item creates a content task and a design/edit task
  */
-function generateCreativePlanTasks(creativePlan, projectId, creativeStrategyId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
+async function generateCreativePlanTasks(creativePlan, projectId, creativeStrategyId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
   const tasks = [];
 
   // Helper function to get team member(s) for a role
@@ -716,22 +735,39 @@ function generateCreativePlanTasks(creativePlan, projectId, creativeStrategyId, 
   const defaultTesters = getTeamMembersForRole('tester');
   const defaultMarketer = getTeamMembersForRole('performance_marketer');
 
-  // Get tester ID (single tester per project)
-  const testerId = defaultTesters && defaultTesters.length > 0
-    ? (defaultTesters[0]._id || defaultTesters[0])
-    : null;
+  // Get tester ID (single tester per project) - with organization validation
+  let testerId = null;
+  if (defaultTesters && defaultTesters.length > 0) {
+    const potentialTesterId = defaultTesters[0]._id || defaultTesters[0];
+    // Verify tester belongs to the project's organization
+    const isValidTester = await verifyUserBelongsToOrg(potentialTesterId, project.organizationId);
+    if (isValidTester) {
+      testerId = potentialTesterId;
+    } else {
+      console.warn(`WARNING: Tester ${potentialTesterId} does not belong to organization ${project.organizationId}. Skipping tester assignment.`);
+    }
+  }
 
-  // Get performance marketer ID (single marketer per project)
-  const marketerId = defaultMarketer && defaultMarketer.length > 0
-    ? (defaultMarketer[0]._id || defaultMarketer[0])
-    : null;
+  // Get performance marketer ID (single marketer per project) - with organization validation
+  let marketerId = null;
+  if (defaultMarketer && defaultMarketer.length > 0) {
+    const potentialMarketerId = defaultMarketer[0]._id || defaultMarketer[0];
+    // Verify marketer belongs to the project's organization
+    const isValidMarketer = await verifyUserBelongsToOrg(potentialMarketerId, project.organizationId);
+    if (isValidMarketer) {
+      marketerId = potentialMarketerId;
+    } else {
+      console.warn(`WARNING: Marketer ${potentialMarketerId} does not belong to organization ${project.organizationId}. Skipping marketer assignment.`);
+    }
+  }
 
   console.log('Team assignments for task generation:', {
     contentWriters: defaultContentWriters?.map(m => m?._id || m),
     graphicDesigners: defaultGraphicDesigners?.map(m => m?._id || m),
     videoEditors: defaultVideoEditors?.map(m => m?._id || m),
     tester: testerId,
-    marketer: marketerId
+    marketer: marketerId,
+    organizationId: project.organizationId
   });
 
   // Creative type to task type mapping - determines which design role receives the task
