@@ -335,7 +335,7 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {isAdmin ? (
+          {(isAdmin || isPerformanceMarketer) && (
             <Button
               variant="secondary"
               onClick={() => navigate(`/dashboard/projects/${id}/assign-team`)}
@@ -343,17 +343,6 @@ export default function ProjectDetailPage() {
               <Users className="w-4 h-4 mr-2" />
               Assign Team
             </Button>
-          ) : (
-            <>
-              <Button variant="secondary" onClick={() => navigate(`/dashboard/projects/${id}/edit`)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-              <Button variant="danger" onClick={handleDelete}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
-            </>
           )}
         </div>
       </div>
@@ -444,8 +433,8 @@ export default function ProjectDetailPage() {
         </CardBody>
       </Card>
 
-      {/* Team Assignment - Admin View */}
-      {isAdmin && (
+      {/* Team Assignment - Admin and Performance Marketer View */}
+      {(isAdmin || isPerformanceMarketer) && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -658,8 +647,8 @@ export default function ProjectDetailPage() {
         </>
       )}
 
-      {/* Admin Message */}
-      {isAdmin && (
+      {/* Team Management Card - Admin and Performance Marketer */}
+      {(isAdmin || isPerformanceMarketer) && (
         <Card>
           <CardBody className="p-6 text-center">
             <Users className="w-12 h-12 mx-auto text-primary-500 mb-4" />
@@ -667,8 +656,9 @@ export default function ProjectDetailPage() {
               Team Workflow Management
             </h3>
             <p className="text-gray-600 mb-4">
-              As an admin, you manage customer onboarding and team assignments.
-              Strategy stages (Market Research, Offer Engineering, etc.) are handled by your team.
+              {isAdmin
+                ? 'As an admin, you manage customer onboarding and team assignments. Strategy stages (Market Research, Offer Engineering, etc.) are handled by your team.'
+                : 'Assign team members to this project to enable them to work on their assigned tasks.'}
             </p>
             <div className="flex justify-center gap-3">
               <Button
@@ -678,13 +668,15 @@ export default function ProjectDetailPage() {
                 <Users className="w-4 h-4 mr-2" />
                 Manage Team
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/dashboard/team')}
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                View All Team Members
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate('/dashboard/team')}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  View All Team Members
+                </Button>
+              )}
             </div>
           </CardBody>
         </Card>

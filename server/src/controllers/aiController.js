@@ -369,12 +369,18 @@ exports.getAIProviders = async (req, res, next) => {
         description: 'Google Gemini 2.5 Flash model',
         requiresApiKey: true
       },
-      // {
-      //   value: 'openai',
-      //   label: 'OpenAI',
-      //   description: 'GPT-3.5/GPT-4 models',
-      //   requiresApiKey: true
-      // },
+      {
+        value: 'openai',
+        label: 'OpenAI',
+        description: 'GPT-3.5/GPT-4 models',
+        requiresApiKey: true
+      },
+      {
+        value: 'deepseek',
+        label: 'DeepSeek',
+        description: 'DeepSeek Chat model',
+        requiresApiKey: true
+      },
       // {
       //   value: 'hypereal',
       //   label: 'Hypereal AI',
@@ -409,12 +415,12 @@ exports.getAIProviders = async (req, res, next) => {
 exports.setAIProvider = async (req, res, next) => {
   try {
     const { provider } = req.body;
-    const validProviders = ['ollama', 'gemini'];
+    const validProviders = ['ollama', 'gemini', 'openai', 'deepseek'];
 
     if (!provider || !validProviders.includes(provider)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid provider. Must be one of: ollama, gemini'
+        message: 'Invalid provider. Must be one of: ollama, gemini, openai, deepseek'
       });
     }
 

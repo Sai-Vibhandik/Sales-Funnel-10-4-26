@@ -1,14 +1,19 @@
 /**
  * AI Service - Handles communication with various AI providers
- * Supports: OpenAI, Ollama, Gemini, Hypereal (configurable via AI_PROVIDER env var)
+ * Supports: OpenAI, Ollama, Gemini, Hypereal, DeepSeek (configurable via AI_PROVIDER env var)
  */
 
 const AI_PROVIDER = process.env.AI_PROVIDER || 'openai';
 
 // OpenAI Configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+
+// DeepSeek Configuration
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 
 // Ollama Configuration
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
@@ -342,10 +347,65 @@ async function generateWithHypereal(systemPrompt, userPrompt) {
 }
 
 /**
+ * Generate content using DeepSeek (OpenAI-compatible API)
+ */
+async function generateWithDeepSeek(systemPrompt, userPrompt) {
+  if (!DEEPSEEK_API_KEY) {
+    throw new Error('DeepSeek API key not configured');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || `DeepSeek API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response from DeepSeek');
+    }
+
+    return data.choices[0].message.content.trim();
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error.name === 'AbortError') {
+      throw new Error('DeepSeek request timed out');
+    }
+
+    throw error;
+  }
+}
+
+/**
  * Main generate function - routes to appropriate AI provider
  * @param {string} systemPrompt - System prompt
  * @param {string} userPrompt - User prompt
- * @param {string} provider - Optional provider override (ollama, gemini, openai, hypereal)
+ * @param {string} provider - Optional provider override (ollama, gemini, openai, hypereal, deepseek)
  */
 async function generateContent(systemPrompt, userPrompt, provider = null) {
   const activeProvider = provider || AI_PROVIDER.toLowerCase();
@@ -359,6 +419,8 @@ async function generateContent(systemPrompt, userPrompt, provider = null) {
       return generateWithGemini(systemPrompt, userPrompt);
     case 'hypereal':
       return generateWithHypereal(systemPrompt, userPrompt);
+    case 'deepseek':
+      return generateWithDeepSeek(systemPrompt, userPrompt);
     default:
       // Default to Ollama
       return generateWithOllama(systemPrompt, userPrompt);
@@ -585,6 +647,16 @@ async function checkAIHealth() {
           available: true,
           provider: 'hypereal',
           model: HYPEREAL_MODEL
+        };
+
+      case 'deepseek':
+        if (!DEEPSEEK_API_KEY) {
+          return { available: false, error: 'DeepSeek API key not configured' };
+        }
+        return {
+          available: true,
+          provider: 'deepseek',
+          model: DEEPSEEK_MODEL
         };
 
       default:
