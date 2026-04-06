@@ -123,7 +123,7 @@ const organizationSchema = new mongoose.Schema({
     timezone: { type: String, default: 'UTC' },
     currency: { type: String, default: 'USD' },
     dateFormat: { type: String, default: 'MM/DD/YYYY' },
-    dateFormat: { type: String, default: 'MM/DD/YYYY' },
+  
     aiProvider: { type: String, default: 'gemini' },
     weekStartsOn: { type: Number, default: 0 }, // 0 = Sunday
     branding: {
@@ -232,6 +232,7 @@ organizationSchema.methods.hasReachedLimit = function(limitType) {
   default:
     return false;
 }
+};
 
 // Check if feature is enabled
 organizationSchema.methods.hasFeature = function(featureName) {
