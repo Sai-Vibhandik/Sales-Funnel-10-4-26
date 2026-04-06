@@ -548,6 +548,7 @@ export default function App() {
         <AppRoutes />
         <Toaster position="top-right" richColors />
       </AuthProvider>
+       <SpeedInsights />
     </BrowserRouter>
   );
 }
