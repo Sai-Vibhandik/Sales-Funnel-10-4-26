@@ -11,5 +11,8 @@
   },
   "engines": {
     "node": "20"
+  },
+  "dependencies": {
+    "openai": "^6.33.0"
   }
 }

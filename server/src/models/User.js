@@ -129,7 +129,7 @@ const userSchema = new mongoose.Schema({
   // AI Provider preference (for content generation)
   preferredAIProvider: {
     type: String,
-    enum: ['gemini', 'ollama', 'openai'],
+    enum: ['gemini', 'ollama'],
     default: 'gemini'
   }
 }, {

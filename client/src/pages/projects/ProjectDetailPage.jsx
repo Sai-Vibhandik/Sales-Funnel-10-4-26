@@ -336,7 +336,7 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {isAdmin ? (
+          {(isAdmin || isPerformanceMarketer) && (
             <Button
               variant="secondary"
               onClick={() => navigate(`/dashboard/projects/${id}/assign-team`)}
@@ -344,17 +344,6 @@ export default function ProjectDetailPage() {
               <Users className="w-4 h-4 mr-2" />
               Assign Team
             </Button>
-          ) : (
-            <>
-              <Button variant="secondary" onClick={() => navigate(`/dashboard/projects/${id}/edit`)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-              <Button variant="danger" onClick={handleDelete}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
-            </>
           )}
         </div>
       </div>
@@ -445,8 +434,8 @@ export default function ProjectDetailPage() {
         </CardBody>
       </Card>
 
-      {/* Team Assignment - Admin View */}
-      {isAdmin && (
+      {/* Team Assignment - Admin and Performance Marketer View */}
+      {(isAdmin || isPerformanceMarketer) && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -668,13 +657,15 @@ export default function ProjectDetailPage() {
                 <Users className="w-4 h-4 mr-2" />
                 Manage Team
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/dashboard/team')}
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                View All Team Members
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate('/dashboard/team')}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  View All Team Members
+                </Button>
+              )}
             </div>
           </CardBody>
         </Card>

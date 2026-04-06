@@ -50,7 +50,7 @@ const subscriptionSchema = new mongoose.Schema({
     maxLandingPages: Number,
     maxLandingPagesPerProject: Number,
     storageLimitMB: Number,
-    aiCallsPerMonth: Number,
+    aiTokensPerMonth: Number,
     customDomains: Number
   },
   features: {
@@ -129,7 +129,7 @@ const subscriptionSchema = new mongoose.Schema({
     projectsCount: { type: Number, default: 0 },
     storageUsedMB: { type: Number, default: 0 },
     apiCallsThisMonth: { type: Number, default: 0 },
-    aiCallsThisMonth: { type: Number, default: 0 },
+    aiTokensUsed: { type: Number, default: 0 }, // AI tokens used this month
     lastUpdated: { type: Date, default: Date.now }
   },
 
@@ -245,13 +245,13 @@ subscriptionSchema.methods.isLimitReached = function(limitType) {
 
   switch (limitType) {
     case 'users':
-      return usage.usersCount >= limits.maxUsers;
+      return limits.maxUsers !== -1 && usage.usersCount >= limits.maxUsers;
     case 'projects':
-      return usage.projectsCount >= limits.maxProjects;
+      return limits.maxProjects !== -1 && usage.projectsCount >= limits.maxProjects;
     case 'storage':
-      return usage.storageUsedMB >= limits.storageLimitMB;
-    case 'aiCalls':
-      return usage.aiCallsThisMonth >= limits.aiCallsPerMonth;
+      return limits.storageLimitMB !== -1 && usage.storageUsedMB >= limits.storageLimitMB;
+    case 'aiTokens':
+      return limits.aiTokensPerMonth !== -1 && usage.aiTokensUsed >= limits.aiTokensPerMonth;
     default:
       return false;
   }

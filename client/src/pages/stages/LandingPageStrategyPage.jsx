@@ -5,6 +5,8 @@ import { Card, CardBody, CardHeader, Button, Input, Textarea, Spinner } from '@/
 import { StageProgressTracker } from '@/components/workflow';
 import { ArrowLeft, ArrowRight, Users, Code, Palette } from 'lucide-react';
 import { projectService } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
+import { Eye } from 'lucide-react';
 
 const LANDING_PAGE_TYPES = [
   { id: 'video_sales_letter', label: 'Video Sales Letter', icon: '🎥' },
@@ -31,6 +33,7 @@ export default function LandingPageStrategyPage() {
   const projectId = searchParams.get('projectId');
   const landingPageId = searchParams.get('landingPageId');
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [project, setProject] = useState(null);
@@ -48,6 +51,11 @@ export default function LandingPageStrategyPage() {
   const [messaging, setMessaging] = useState('');
   const [assignedDesigner, setAssignedDesigner] = useState('');
   const [assignedDeveloper, setAssignedDeveloper] = useState('');
+
+  // Permission checks - Only Performance Marketer can edit, Admin view only
+  const isAdmin = user?.role === 'admin';
+  const isPerformanceMarketer = user?.role === 'performance_marketer';
+  const canEdit = isPerformanceMarketer && !isAdmin;
 
   useEffect(() => {
     if (!projectId) {
@@ -251,6 +259,12 @@ export default function LandingPageStrategyPage() {
           </h1>
           <p className="text-gray-600 mt-1">{project?.businessName}</p>
         </div>
+        {isAdmin && !isPerformanceMarketer && (
+          <div className="flex items-center gap-1 text-blue-600 text-sm">
+            <Eye className="w-4 h-4" />
+            <span>View Only</span>
+          </div>
+        )}
       </div>
 
       {/* Progress */}
@@ -259,6 +273,21 @@ export default function LandingPageStrategyPage() {
           <StageProgressTracker stages={project?.stages} currentStage={project?.currentStage} />
         </CardBody>
       </Card>
+
+      {/* Read Only Notice for Admin */}
+      {isAdmin && !isPerformanceMarketer && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <Eye className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-blue-900">View Only</h3>
+              <p className="text-sm text-blue-700">
+                You can view the Landing Page Strategy, but only Performance Marketers can make changes. Contact your team if changes are needed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Basic Info */}
       <Card>
@@ -272,6 +301,7 @@ export default function LandingPageStrategyPage() {
             placeholder="e.g., Main Landing Page, Campaign A, etc."
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={!canEdit}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -279,7 +309,8 @@ export default function LandingPageStrategyPage() {
               <select
                 value={funnelType}
                 onChange={(e) => setFunnelType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                disabled={!canEdit}
               >
                 {LANDING_PAGE_TYPES.map((type) => (
                   <option key={type.id} value={type.id}>{type.label}</option>
@@ -307,7 +338,8 @@ export default function LandingPageStrategyPage() {
                         isSelected
                           ? 'bg-primary-100 border-primary-300 text-primary-700'
                           : 'bg-white border-gray-200 text-gray-600 hover:border-primary-200 hover:bg-primary-50'
-                      }`}
+                      } ${!canEdit ? 'cursor-not-allowed opacity-60' : ''}`}
+                      disabled={!canEdit}
                     >
                       {p.label}
                     </button>
@@ -338,7 +370,8 @@ export default function LandingPageStrategyPage() {
               <select
                 value={assignedDesigner}
                 onChange={(e) => setAssignedDesigner(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                disabled={!canEdit}
               >
                 <option value="">Select Designer...</option>
                 {designers.map(d => (
@@ -361,7 +394,8 @@ export default function LandingPageStrategyPage() {
               <select
                 value={assignedDeveloper}
                 onChange={(e) => setAssignedDeveloper(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                disabled={!canEdit}
               >
                 <option value="">Select Developer...</option>
                 {developers.map(d => (
@@ -433,15 +467,17 @@ export default function LandingPageStrategyPage() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Landing Pages
         </Button>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onSave} loading={saving}>
-            Save
-          </Button>
-          {/* <Button onClick={handleContinue} loading={saving}>
-            Continue to Creative Strategy
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button> */}
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onSave} loading={saving}>
+              Save
+            </Button>
+            {/* <Button onClick={handleContinue} loading={saving}>
+              Continue to Creative Strategy
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button> */}
+          </div>
+        )}
       </div>
     </div>
   );

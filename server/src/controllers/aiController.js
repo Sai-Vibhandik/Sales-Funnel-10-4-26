@@ -384,6 +384,12 @@ exports.getAIProviders = async (req, res, next) => {
         requiresApiKey: true
       },
       // {
+      //   value: 'deepseek',
+      //   label: 'DeepSeek',
+      //   description: 'DeepSeek Chat model',
+      //   requiresApiKey: true
+      // },
+      // {
       //   value: 'hypereal',
       //   label: 'Hypereal AI',
       //   description: 'Claude Sonnet via Hypereal',

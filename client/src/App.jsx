@@ -278,13 +278,13 @@ function AppRoutes() {
           }
         />
 
-        {/* Team Assignment - Admin only */}
+        {/* Team Assignment - Admin and Performance Marketer */}
         <Route
           path="projects/:id/assign-team"
           element={
-            <AdminRoute>
+            <MarketerRoute>
               <TeamAssignmentPage />
-            </AdminRoute>
+            </MarketerRoute>
           }
         />
 

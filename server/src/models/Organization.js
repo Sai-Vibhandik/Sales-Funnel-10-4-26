@@ -39,7 +39,7 @@ const organizationSchema = new mongoose.Schema({
     maxLandingPages: { type: Number, default: 5 },
     maxLandingPagesPerProject: { type: Number, default: 5 },
     storageLimitMB: { type: Number, default: 1024 }, // 1GB
-    aiCallsPerMonth: { type: Number, default: 50 },
+    aiTokensPerMonth: { type: Number, default: 10000 }, // AI token limit per month
     customDomains: { type: Number, default: 0 }
   },
   features: {
@@ -113,8 +113,9 @@ const organizationSchema = new mongoose.Schema({
     projectsCount: { type: Number, default: 0 },
     landingPagesCount: { type: Number, default: 0 },
     storageUsedMB: { type: Number, default: 0 },
-    aiCallsThisMonth: { type: Number, default: 0 },
-    lastUsageUpdate: { type: Date, default: Date.now }
+    aiTokensUsed: { type: Number, default: 0 }, // AI tokens used this month
+    lastUsageUpdate: { type: Date, default: Date.now },
+    lastTokenReset: { type: Date, default: Date.now } // When tokens were last reset
   },
 
   // Settings
@@ -203,32 +204,34 @@ organizationSchema.methods.hasReachedLimit = function(limitType) {
   const limits = this.planLimits;
   const usage = this.usage;
 
-  switch (limitType) {
-    case 'users': {
-      const limit = limits.maxUsers;
-      // -1 means unlimited
-      if (limit === -1) return false;
-      return (usage.usersCount || 0) >= limit;
-    }
-    case 'projects': {
-      const limit = limits.maxProjects;
-      if (limit === -1) return false;
-      return (usage.projectsCount || 0) >= limit;
-    }
-    case 'storage': {
-      const limit = limits.storageLimitMB;
-      if (limit === -1) return false;
-      return (usage.storageUsedMB || 0) >= limit;
-    }
-    case 'aiCalls': {
-      const limit = limits.aiCallsPerMonth;
-      if (limit === -1) return false;
-      return (usage.aiCallsThisMonth || 0) >= limit;
-    }
-    default:
-      return false;
+ switch (limitType) {
+  case 'users': {
+    const limit = limits.maxUsers;
+    if (limit === -1) return false;
+    return (usage.usersCount || 0) >= limit;
   }
-};
+
+  case 'projects': {
+    const limit = limits.maxProjects;
+    if (limit === -1) return false;
+    return (usage.projectsCount || 0) >= limit;
+  }
+
+  case 'storage': {
+    const limit = limits.storageLimitMB;
+    if (limit === -1) return false;
+    return (usage.storageUsedMB || 0) >= limit;
+  }
+
+  case 'aiTokens': {
+    const limit = limits.aiTokensPerMonth;
+    if (limit === -1) return false;
+    return (usage.aiTokensUsed || 0) >= limit;
+  }
+
+  default:
+    return false;
+}
 
 // Check if feature is enabled
 organizationSchema.methods.hasFeature = function(featureName) {

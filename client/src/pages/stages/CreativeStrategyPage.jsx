@@ -22,7 +22,7 @@ export default function CreativeStrategyPage() {
 
   const isAdmin = user?.role === 'admin';
   const isPerformanceMarketer = user?.role === 'performance_marketer';
-  const canEdit = isAdmin || isPerformanceMarketer; // Admin and Performance Marketer can edit
+  const canEdit = isPerformanceMarketer && !isAdmin; // Only Performance Marketer can edit, Admin view only
 
   useEffect(() => {
     if (!projectId) {
@@ -125,7 +125,7 @@ export default function CreativeStrategyPage() {
           <h1 className="text-2xl font-bold text-gray-900">Creative Strategy</h1>
           <p className="text-gray-600 mt-1">{project?.businessName || project?.projectName}</p>
         </div>
-        {isPerformanceMarketer && !isAdmin && (
+        {isAdmin && !isPerformanceMarketer && (
           <div className="flex items-center gap-1 text-blue-600 text-sm">
             <Eye className="w-4 h-4" />
             <span>View Only</span>
@@ -133,15 +133,15 @@ export default function CreativeStrategyPage() {
         )}
       </div>
 
-      {/* Read Only Notice for non-authorized users */}
-      {!canEdit && !isCompleted && (
+      {/* Read Only Notice for Admin */}
+      {isAdmin && !isPerformanceMarketer && !isCompleted && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
             <Eye className="w-5 h-5 text-blue-600 mt-0.5" />
             <div>
               <h3 className="font-semibold text-blue-900">View Only</h3>
               <p className="text-sm text-blue-700">
-                You can view the Creative Strategy, but only Admins and Performance Marketers can make changes. Contact your administrator if changes are needed.
+                You can view the Creative Strategy, but only Performance Marketers can make changes. Contact your team if changes are needed.
               </p>
             </div>
           </div>
