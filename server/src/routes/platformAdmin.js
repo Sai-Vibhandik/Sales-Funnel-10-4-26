@@ -719,10 +719,26 @@ router.put('/prompts/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Clean up the update data - remove undefined values and handle role-specific fields
+    const updateData = { ...req.body, updatedAt: new Date() };
+
+    // For non-content_writer roles, clear frameworkType and subCategory
+    if (updateData.role && updateData.role !== 'content_writer') {
+      updateData.frameworkType = undefined;
+      updateData.subCategory = undefined;
+    }
+
+    // Remove undefined values to avoid issues
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined || updateData[key] === '') {
+        delete updateData[key];
+      }
+    });
+
     const prompt = await Prompt.findByIdAndUpdate(
       id,
-      { ...req.body, updatedAt: new Date() },
-      { new: true, runValidators: true }
+      updateData,
+      { new: true }
     );
 
     if (!prompt) {
@@ -741,7 +757,8 @@ router.put('/prompts/:id', async (req, res) => {
     console.error('Update prompt error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update prompt'
+      message: 'Failed to update prompt',
+      error: error.message
     });
   }
 });

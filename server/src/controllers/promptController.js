@@ -95,14 +95,14 @@ exports.getPrompt = async (req, res, next) => {
 
 // @desc    Create new prompt
 // @route   POST /api/prompts
-// @access  Private (Admin only)
+// @access  Private (Platform Admin only)
 exports.createPrompt = async (req, res, next) => {
   try {
-    // Only admin can create prompts
-    if (req.user.role !== 'admin') {
+    // Only platform admin can create prompts
+    if (req.user.role !== 'platform_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only admins can create prompts'
+        message: 'Only platform admins can create prompts'
       });
     }
 
@@ -185,42 +185,15 @@ exports.createPrompt = async (req, res, next) => {
 
 // @desc    Update prompt
 // @route   PUT /api/prompts/:id
-// @access  Private (Admin only)
+// @access  Private (Platform Admin only)
 exports.updatePrompt = async (req, res, next) => {
   try {
-    // Only admin can update prompts
-    if (req.user.role !== 'admin') {
+    // Only platform admin can update prompts
+    if (req.user.role !== 'platform_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only admins can update prompts'
+        message: 'Only platform admins can update prompts'
       });
-    }
-
-    let {
-      title,
-      role,
-      frameworkType,
-      subCategory,
-      content,
-      category,
-      platform,
-      funnelStage,
-      creativeType,
-      description,
-      tags,
-      isActive
-    } = req.body;
-
-    // Validate and normalize frameworkType - must be a string, not an array
-    if (frameworkType !== undefined && frameworkType !== null) {
-      if (Array.isArray(frameworkType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Framework type must be a single value, not an array. Please select only one framework.'
-        });
-      }
-      // Ensure it's a string
-      frameworkType = String(frameworkType).trim();
     }
 
     const prompt = await Prompt.findById(req.params.id);
@@ -232,34 +205,22 @@ exports.updatePrompt = async (req, res, next) => {
       });
     }
 
-    // Validate subCategory if provided
-    const finalFrameworkType = frameworkType !== undefined ? frameworkType : prompt.frameworkType;
-    const finalSubCategory = subCategory !== undefined ? subCategory : prompt.subCategory;
+    // Simply update all provided fields
+    const updates = req.body;
 
-    if (finalSubCategory && finalFrameworkType) {
-      const categoryExists = await FrameworkCategory.exists(finalFrameworkType, finalSubCategory);
-      if (!categoryExists) {
-        return res.status(400).json({
-          success: false,
-          message: `SubCategory '${finalSubCategory}' does not exist for framework '${finalFrameworkType}'. Please create it first or use an existing subcategory.`
-        });
-      }
-    }
-
-    // Update fields
-    if (title !== undefined) prompt.title = title;
-    if (role !== undefined) prompt.role = role;
-    if (frameworkType !== undefined) prompt.frameworkType = frameworkType;
-    if (subCategory !== undefined) prompt.subCategory = subCategory || null;
-    if (content !== undefined) prompt.content = content;
-    // Only update category and platform for non-content_writer roles
-    if (category !== undefined && prompt.role !== 'content_writer') prompt.category = category;
-    if (platform !== undefined && prompt.role !== 'content_writer') prompt.platform = platform;
-    if (funnelStage !== undefined) prompt.funnelStage = funnelStage;
-    if (creativeType !== undefined) prompt.creativeType = creativeType;
-    if (description !== undefined) prompt.description = description;
-    if (tags !== undefined) prompt.tags = tags;
-    if (isActive !== undefined) prompt.isActive = isActive;
+    // Apply updates
+    if (updates.title !== undefined) prompt.title = updates.title;
+    if (updates.role !== undefined) prompt.role = updates.role;
+    if (updates.frameworkType !== undefined) prompt.frameworkType = updates.frameworkType || undefined;
+    if (updates.subCategory !== undefined) prompt.subCategory = updates.subCategory || undefined;
+    if (updates.content !== undefined) prompt.content = updates.content;
+    if (updates.category !== undefined) prompt.category = updates.category;
+    if (updates.platform !== undefined) prompt.platform = updates.platform;
+    if (updates.funnelStage !== undefined) prompt.funnelStage = updates.funnelStage;
+    if (updates.creativeType !== undefined) prompt.creativeType = updates.creativeType;
+    if (updates.description !== undefined) prompt.description = updates.description;
+    if (updates.tags !== undefined) prompt.tags = updates.tags;
+    if (updates.isActive !== undefined) prompt.isActive = updates.isActive;
 
     await prompt.save();
 
@@ -269,20 +230,21 @@ exports.updatePrompt = async (req, res, next) => {
       message: 'Prompt updated successfully'
     });
   } catch (error) {
+    console.error('Error updating prompt:', error);
     next(error);
   }
 };
 
 // @desc    Delete prompt
 // @route   DELETE /api/prompts/:id
-// @access  Private (Admin only)
+// @access  Private (Platform Admin only)
 exports.deletePrompt = async (req, res, next) => {
   try {
-    // Only admin can delete prompts
-    if (req.user.role !== 'admin') {
+    // Only platform admin can delete prompts
+    if (req.user.role !== 'platform_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only admins can delete prompts'
+        message: 'Only platform admins can delete prompts'
       });
     }
 
@@ -308,14 +270,14 @@ exports.deletePrompt = async (req, res, next) => {
 
 // @desc    Toggle prompt active status
 // @route   PUT /api/prompts/:id/toggle-active
-// @access  Private (Admin only)
+// @access  Private (Platform Admin only)
 exports.togglePromptActive = async (req, res, next) => {
   try {
-    // Only admin can toggle active status
-    if (req.user.role !== 'admin') {
+    // Only platform admin can toggle active status
+    if (req.user.role !== 'platform_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only admins can toggle prompt status'
+        message: 'Only platform admins can toggle prompt status'
       });
     }
 
@@ -625,14 +587,14 @@ exports.getFrameworkTypes = async (req, res, next) => {
 
 // @desc    Check Ollama health status
 // @route   GET /api/prompts/ollama-status
-// @access  Private (Admin only)
+// @access  Private (Platform Admin only)
 exports.getOllamaStatus = async (req, res, next) => {
   try {
-    // Only admin can check AI status
-    if (req.user.role !== 'admin') {
+    // Only platform admin can check AI status
+    if (req.user.role !== 'platform_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only admins can check AI status'
+        message: 'Only platform admins can check AI status'
       });
     }
 

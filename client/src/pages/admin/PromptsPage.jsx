@@ -726,6 +726,7 @@ export default function PromptsPage() {
         title: data.title,
         role: data.role,
         frameworkType: data.role === 'content_writer' ? frameworkTypeValue : undefined,
+        subCategory: data.role === 'content_writer' && data.subCategory ? data.subCategory : undefined,
         content: data.content,
         category: data.role === 'content_writer' ? undefined : (data.category || 'general'),
         platform: data.role === 'content_writer' ? undefined : (data.platform || 'all'),

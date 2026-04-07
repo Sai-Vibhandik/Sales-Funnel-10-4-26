@@ -10,7 +10,7 @@
  * Run with: node server/src/scripts/seedFrameworkCategories.js
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../../../.env') });
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 
 const mongoose = require('mongoose');
 const FrameworkCategory = require('../models/FrameworkCategory');
