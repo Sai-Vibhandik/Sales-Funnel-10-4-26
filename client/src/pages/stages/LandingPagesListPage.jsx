@@ -116,18 +116,16 @@ export default function LandingPagesListPage() {
       {!project?.stages?.landingPage?.isCompleted && canEdit && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <SkipForward className="w-5 h-5 text-amber-600 mt-0.5" />
+        
             <div className="flex-1">
               <h3 className="font-semibold text-amber-900">No Landing Page Required?</h3>
-              <p className="text-sm text-amber-700 mt-1">
-                If this project doesn't need a landing page, you can skip this stage and proceed directly to Creative Strategy.
-              </p>
+              
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleSkipLandingPage}
                 loading={skipping}
-                className="mt-3 border-amber-300 text-amber-700 hover:bg-amber-100"
+                className="mt-3 border-amber-300 text-amber-700 hover:bg-amber-200 bg-amber-100"
               >
                 <SkipForward className="w-4 h-4 mr-2" />
                 Skip Landing Page Stage

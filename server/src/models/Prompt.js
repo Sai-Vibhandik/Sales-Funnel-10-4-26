@@ -48,9 +48,10 @@ const promptSchema = new mongoose.Schema({
   },
 
   // Framework Type (Required for content_writer role)
+  // Can be a predefined framework or a custom one created by admins
   frameworkType: {
     type: String,
-    enum: FRAMEWORK_TYPES,
+    trim: true,
     required: function() {
       return this.role === 'content_writer';
     }

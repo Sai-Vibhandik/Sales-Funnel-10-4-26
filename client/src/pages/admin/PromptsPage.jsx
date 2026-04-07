@@ -516,6 +516,8 @@ export default function PromptsPage() {
   const [ollamaStatus, setOllamaStatus] = useState(null);
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedFramework, setSelectedFramework] = useState('');
+  const [customFramework, setCustomFramework] = useState(''); // For custom framework input
+  const [showCustomFramework, setShowCustomFramework] = useState(false); // Toggle custom framework input
   const [expandedFrameworks, setExpandedFrameworks] = useState({});
   const [subCategories, setSubCategories] = useState([]); // For modal dropdown
   const [allSubCategories, setAllSubCategories] = useState([]); // For displaying in framework cards
@@ -645,6 +647,8 @@ export default function PromptsPage() {
   const openAddModal = () => {
     setEditingPrompt(null);
     setSelectedFramework('');
+    setCustomFramework('');
+    setShowCustomFramework(false);
     setSubCategories([]); // Clear subcategories
     reset({
       title: '',
@@ -665,7 +669,20 @@ export default function PromptsPage() {
   const openEditModal = (prompt) => {
     setEditingPrompt(prompt);
     setSelectedRole(prompt.role);
-    setSelectedFramework(prompt.frameworkType || '');
+
+    // Check if framework is a predefined one or custom
+    const isPredefined = frameworkOptions.some(f => f.value === prompt.frameworkType);
+    if (prompt.frameworkType && !isPredefined) {
+      // Custom framework
+      setSelectedFramework('__custom__');
+      setCustomFramework(prompt.frameworkType);
+      setShowCustomFramework(true);
+    } else {
+      setSelectedFramework(prompt.frameworkType || '');
+      setCustomFramework('');
+      setShowCustomFramework(false);
+    }
+
     // Fetch subcategories if framework is set
     if (prompt.frameworkType) {
       fetchSubCategories(prompt.frameworkType);
@@ -687,6 +704,18 @@ export default function PromptsPage() {
   };
 
   const handleFrameworkChange = (frameworkType) => {
+    // Handle custom framework selection
+    if (frameworkType === '__custom__') {
+      setShowCustomFramework(true);
+      setSelectedFramework('__custom__');
+      setValue('frameworkType', '');
+      setValue('subCategory', '');
+      setSubCategories([]);
+      return;
+    }
+
+    setShowCustomFramework(false);
+    setCustomFramework('');
     setSelectedFramework(frameworkType);
     setValue('frameworkType', frameworkType);
     setValue('subCategory', ''); // Reset subcategory when framework changes
@@ -707,6 +736,13 @@ export default function PromptsPage() {
         setValue('title', framework.label);
       }
     }
+  };
+
+  const handleCustomFrameworkChange = (value) => {
+    setCustomFramework(value);
+    setValue('frameworkType', value.toUpperCase().replace(/\s+/g, '_'));
+    setValue('subCategory', '');
+    setSubCategories([]);
   };
 
   const onSubmit = async (data) => {
@@ -780,7 +816,10 @@ export default function PromptsPage() {
   };
 
   const getFrameworkLabel = (frameworkType) => {
-    return frameworkOptions.find(f => f.value === frameworkType)?.label || frameworkType;
+    const predefined = frameworkOptions.find(f => f.value === frameworkType);
+    if (predefined) return predefined.label;
+    // Return custom framework name formatted nicely
+    return frameworkType ? frameworkType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : frameworkType;
   };
 
   return (
@@ -1228,23 +1267,42 @@ export default function PromptsPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Framework Type *
-                      <span className="ml-2 text-xs text-purple-600 flex items-center inline">
+                      <span className="ml-2 text-xs text-purple-600 inline-flex items-center">
                         <Sparkles className="w-3 h-3 mr-1" />
                         AI-Optimized Template
                       </span>
                     </label>
                     <select
                       className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                      {...register('frameworkType')}
+                      value={selectedFramework}
                       onChange={(e) => handleFrameworkChange(e.target.value)}
                     >
                       <option value="">Select a framework</option>
                       {frameworkOptions.map(option => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
+                      <option value="__custom__">+ Add Custom Framework</option>
                     </select>
                     {errors.frameworkType && <p className="text-sm text-red-500 mt-1">{errors.frameworkType.message}</p>}
-                    {selectedFramework && (
+
+                    {/* Custom Framework Input */}
+                    {showCustomFramework && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          placeholder="Enter custom framework name (e.g., MY_CUSTOM_FRAMEWORK)"
+                          className="w-full px-4 py-2 rounded-lg border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 bg-purple-50"
+                          value={customFramework}
+                          onChange={(e) => handleCustomFrameworkChange(e.target.value)}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Use uppercase letters with underscores (e.g., VIDEO_SCRIPT, SALES_EMAIL)
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Show description for predefined frameworks */}
+                    {selectedFramework && !showCustomFramework && frameworkOptions.find(f => f.value === selectedFramework) && (
                       <p className="text-xs text-gray-500 mt-1">
                         {frameworkOptions.find(f => f.value === selectedFramework)?.description}
                       </p>
@@ -1287,7 +1345,7 @@ export default function PromptsPage() {
                   {errors.content && <p className="text-sm text-red-500 mt-1">{errors.content.message}</p>}
                   {selectedRole === 'content_writer' && selectedFramework && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Framework template loaded. The placeholders (like {'{{problem}}', '{{audience}}'}) will be replaced with actual task context when used.
+                      Framework template loaded. The placeholders (like {'{{problem}}'}, {'{{audience}}'}) will be replaced with actual task context when used.
                     </p>
                   )}
                 </div>
