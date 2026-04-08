@@ -531,53 +531,90 @@ export default function TesterReviewPage() {
 
       {/* Rejection Modal */}
       {showRejectionModal && selectedTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4 text-red-600">Reject Task</h2>
-            <p className="text-gray-600 mb-4">{selectedTask.taskTitle}</p>
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setShowRejectionModal(false);
+              setSelectedTask(null);
+              setRejectionNote('');
+              setRejectionReason('');
+            }}
+          />
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reason for Rejection
-                </label>
-                <select
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+          {/* Modal Container - centered */}
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-white shadow-2xl">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-red-50 to-red-100 px-6 py-4 border-b border-red-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <XCircle className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Reject Task</h2>
+                    <p className="text-sm text-gray-600">{selectedTask.taskTitle}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reason for Rejection
+                  </label>
+                  <select
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 bg-white text-gray-900"
+                  >
+                    <option value="">Select a reason...</option>
+                    <option value="quality">Quality issues</option>
+                    <option value="brand">Brand guideline mismatch</option>
+                    <option value="technical">Technical issues</option>
+                    <option value="content">Content/Copy issues</option>
+                    <option value="instructions">Did not follow instructions</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Detailed Feedback <span className="text-red-500">*</span>
+                  </label>
+                  <Textarea
+                    value={rejectionNote}
+                    onChange={(e) => setRejectionNote(e.target.value)}
+                    placeholder="Provide specific feedback for improvement..."
+                    rows={4}
+                    className="resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRejectionModal(false);
+                    setSelectedTask(null);
+                    setRejectionNote('');
+                    setRejectionReason('');
+                  }}
                 >
-                  <option value="">Select a reason...</option>
-                  <option value="quality">Quality issues</option>
-                  <option value="brand">Brand guideline mismatch</option>
-                  <option value="technical">Technical issues</option>
-                  <option value="content">Content/Copy issues</option>
-                  <option value="instructions">Did not follow instructions</option>
-                  <option value="other">Other</option>
-                </select>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleReject}
+                  disabled={!rejectionNote.trim()}
+                  className="bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
+                >
+                  <XCircle className="w-4 h-4 mr-1" />
+                  Reject Task
+                </Button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Detailed Feedback
-                </label>
-                <Textarea
-                  value={rejectionNote}
-                  onChange={(e) => setRejectionNote(e.target.value)}
-                  placeholder="Provide specific feedback for improvement..."
-                  rows={4}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <Button variant="secondary" onClick={() => setShowRejectionModal(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleReject}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Reject Task
-              </Button>
             </div>
           </div>
         </div>

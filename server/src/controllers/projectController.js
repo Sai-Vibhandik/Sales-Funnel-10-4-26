@@ -547,8 +547,12 @@ exports.assignTeam = async (req, res, next) => {
       performanceMarketersArray = [performanceMarketersArray[0]];
     }
 
-    // Testers can now be multiple (removed single-tester restriction)
-    const testersArray = testers || [];
+    // Ensure testers has at most one member - single tester per project to avoid confusion in task assignment
+    let testersArray = testers || [];
+    if (testersArray.length > 1) {
+      console.log('Warning: Multiple testers provided, keeping only the first one');
+      testersArray = [testersArray[0]];
+    }
 
     // Update assigned team - support both new array fields and legacy single fields
     project.assignedTeam = {

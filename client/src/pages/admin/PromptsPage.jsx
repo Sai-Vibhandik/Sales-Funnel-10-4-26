@@ -549,9 +549,15 @@ export default function PromptsPage() {
 
   useEffect(() => {
     fetchPrompts();
-    checkOllamaStatus();
     fetchAllSubCategories();
   }, []);
+
+  // Only check Ollama status for platform admins
+  useEffect(() => {
+    if (isPlatformAdmin) {
+      checkOllamaStatus();
+    }
+  }, [isPlatformAdmin]);
 
   useEffect(() => {
     setSelectedRole(watchRole || '');

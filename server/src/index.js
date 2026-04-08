@@ -6,7 +6,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
-
+const paymentRoutes = require("./routes/paymentRoutes");
 // Database
 const connectDB = require("./config/database");
 connectDB();
@@ -89,6 +89,7 @@ app.use("/api/ai", protect, setTenantContext, requireOrganization, aiRoutes);
 app.use("/api/framework-categories", protect, setTenantContext, requireOrganization, frameworkCategoryRoutes);
 app.use("/api/platform", platformAdminRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/payments", paymentRoutes);
 app.use("/api/webhooks", webhookRoutes);
 
 // 404 handler

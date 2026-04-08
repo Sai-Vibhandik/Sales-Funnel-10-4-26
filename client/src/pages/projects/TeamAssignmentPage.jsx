@@ -68,6 +68,7 @@ const ROLE_CONFIG = {
     color: 'bg-orange-100 text-orange-700',
     borderColor: 'border-orange-200',
     bgColor: 'rgba(249, 115, 22, 0.1)',
+    singleSelect: true, // Only ONE tester per project to avoid confusion in task assignment
   },
 };
 
@@ -291,7 +292,7 @@ export default function TeamAssignmentPage() {
             <h3 className="text-lg font-semibold text-gray-900">Team Assignment</h3>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Assign team members to project roles. Performance Marketer is limited to one person per project.
+            Assign team members to project roles. Performance Marketer and Tester are limited to one person per project.
           </p>
         </CardHeader>
         <CardBody className="p-6">

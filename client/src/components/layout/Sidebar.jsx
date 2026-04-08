@@ -114,6 +114,7 @@ const navigationByRole = {
   // TESTER
   tester: [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'My Projects', href: '/dashboard/projects', icon: FolderKanban },
     { name: 'Assets Awaiting Review', href: '/dashboard/tasks/review', icon: ClipboardCheck },
     { name: 'Approved Assets', href: '/dashboard/tasks/approved', icon: FileCheck },
   ],

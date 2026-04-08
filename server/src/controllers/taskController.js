@@ -360,6 +360,23 @@ exports.updateTask = async (req, res, next) => {
           task.assignedTo = task.testerId;
         }
       }
+
+      // If testerId is not set and task is being submitted, get tester from project
+      if (['content_submitted', 'design_submitted', 'development_submitted'].includes(status) && !task.testerId) {
+        const project = await Project.findById(task.projectId._id || task.projectId).select('assignedTeam');
+        if (project?.assignedTeam) {
+          // Get tester from project team (check array field first, then legacy field)
+          const projectTesterId = project.assignedTeam.testers?.[0]?._id ||
+                                   project.assignedTeam.testers?.[0] ||
+                                   project.assignedTeam.tester?._id ||
+                                   project.assignedTeam.tester;
+          if (projectTesterId) {
+            task.testerId = projectTesterId;
+            task.assignedTo = projectTesterId;
+            console.log(`Task ${task._id}: Setting testerId from project: ${projectTesterId}`);
+          }
+        }
+      }
       // When rejected, assign back to original role
       else if (status === 'content_rejected') {
         task.assignedRole = 'content_writer';
@@ -1524,12 +1541,36 @@ exports.getPendingReviewTasks = async (req, res, next) => {
       query = baseQuery;
       console.log('Admin query - showing all org tasks');
     } else {
-      // Testers can only see tasks assigned to them
+      // Get projects where this tester is assigned in the team
+      const projectsWithTester = await Project.find({
+        organizationId: req.organizationId,
+        $or: [
+          { 'assignedTeam.testers': req.user._id },
+          { 'assignedTeam.tester': req.user._id }  // legacy field
+        ]
+      }).select('_id');
+
+      const projectIds = projectsWithTester.map(p => p._id);
+      console.log('Projects where tester is assigned:', projectIds.length);
+
+      // Testers can see tasks where:
+      // 1. testerId matches their ID, OR
+      // 2. testerId is not set but the task belongs to a project they're assigned to
       query = {
         ...baseQuery,
-        testerId: req.user._id
+        $or: [
+          { testerId: req.user._id },
+          {
+            testerId: { $exists: false },
+            projectId: { $in: projectIds }
+          },
+          {
+            testerId: null,
+            projectId: { $in: projectIds }
+          }
+        ]
       };
-      console.log('Tester query - only showing tasks assigned to tester:', req.user._id);
+      console.log('Tester query - showing tasks assigned to tester or in their projects:', req.user._id);
     }
 
     console.log('Query:', JSON.stringify(query, null, 2));
