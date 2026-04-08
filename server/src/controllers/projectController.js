@@ -1,9 +1,11 @@
 const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const Task = require('../models/Task');
+const User = require('../models/User');
 const Membership = require('../models/Membership');
 const { getStageStatus, completeStage } = require('../middleware/stageGating');
 const UsageService = require('../services/usageService');
+const emailService = require('../services/emailService');
 
 // Helper to emit notification (will be set from index.js)
 let io = null;
@@ -12,7 +14,16 @@ const setIO = (socketIO) => {
 };
 
 // Helper to create and emit notification
-const createNotification = async ({ recipient, type, title, message, projectId, organizationId }) => {
+const createNotification = async ({
+  recipient,
+  type,
+  title,
+  message,
+  projectId,
+  organizationId,
+  sendEmail = false,
+  emailData = null
+}) => {
   try {
     const notification = await Notification.create({
       recipient,
@@ -34,6 +45,19 @@ const createNotification = async ({ recipient, type, title, message, projectId, 
         isRead: false,
         createdAt: notification.createdAt
       });
+    }
+
+    // Send email if requested
+    if (sendEmail && emailData) {
+      const recipientUser = await User.findById(recipient).select('name email');
+      if (recipientUser) {
+        emailService.sendProjectAssignmentNotification(
+          emailData.project,
+          recipientUser,
+          emailData.role,
+          emailData.assignedBy
+        ).catch(err => console.error('Failed to send project assignment email:', err));
+      }
     }
 
     return notification;
@@ -624,15 +648,35 @@ exports.assignTeam = async (req, res, next) => {
       testers: 'Tester'
     };
 
+    // Get user's role in this assignment
+    const getUserRole = (userId) => {
+      const id = userId.toString();
+      if (performanceMarketers?.some(m => m.toString() === id) || performanceMarketer?.toString() === id) return 'performance_marketer';
+      if (contentWriters?.some(m => m.toString() === id) || req.body.contentWriter?.toString() === id) return 'content_writer';
+      if (uiUxDesigners?.some(m => m.toString() === id) || uiUxDesigner?.toString() === id) return 'ui_ux_designer';
+      if (graphicDesigners?.some(m => m.toString() === id) || graphicDesigner?.toString() === id) return 'graphic_designer';
+      if (videoEditors?.some(m => m.toString() === id) || req.body.videoEditor?.toString() === id) return 'video_editor';
+      if (developers?.some(m => m.toString() === id) || developer?.toString() === id) return 'developer';
+      if (testers?.some(m => m.toString() === id) || tester?.toString() === id) return 'tester';
+      return 'team_member';
+    };
+
     // Send notifications to assigned team members
     for (const userId of allAssignedIds) {
+      const userRole = getUserRole(userId);
       await createNotification({
         recipient: userId,
         type: 'project_assigned',
         title: 'New Project Assignment',
         message: `You have been assigned to project: ${project.projectName || project.businessName}`,
         projectId: project._id,
-        organizationId: project.organizationId
+        organizationId: project.organizationId,
+        sendEmail: true,
+        emailData: {
+          project,
+          role: userRole,
+          assignedBy: req.user
+        }
       });
     }
 

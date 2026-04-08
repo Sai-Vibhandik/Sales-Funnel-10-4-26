@@ -7,6 +7,7 @@ const Subscription = require('../models/Subscription');
 const UsageLog = require('../models/UsageLog');
 const Plan = require('../models/Plan');
 const { BillingService } = require('../services/billingService');
+const emailService = require('../services/emailService');
 
 /**
  * Organization Controller
@@ -27,6 +28,9 @@ const { BillingService } = require('../services/billingService');
  * First user to create an organization gets the 'admin' role.
  */
 exports.createOrganization = async (req, res) => {
+  console.log('=== createOrganization called ===');
+  console.log('Request body:', req.body);
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -261,6 +265,15 @@ exports.createOrganization = async (req, res) => {
     });
 
     await session.commitTransaction();
+
+    console.log('=== Organization created successfully, about to send email ===');
+    console.log('Org:', org.name);
+    console.log('Owner:', req.user?.name, req.user?.email);
+    console.log('Plan:', plan?.name);
+
+    // Send email notification to platform admins (async, don't block)
+    emailService.sendOrgRegistrationNotification(org, req.user, plan)
+      .catch(err => console.error('Failed to send org registration notification:', err));
 
     // Populate owner info
     await org.populate('owner', 'name email avatar');
@@ -697,8 +710,9 @@ exports.inviteMember = async (req, res) => {
 
     await session.commitTransaction();
 
-    // TODO: Send invitation email
-    // await sendInvitationEmail(invitation[0], organization, req.user);
+    // Send invitation email (async, don't block)
+    emailService.sendTeamInvitation(invitation[0], organization, req.user)
+      .catch(err => console.error('Failed to send team invitation email:', err));
 
     res.status(201).json({
       success: true,

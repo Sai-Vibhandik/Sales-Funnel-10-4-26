@@ -10,56 +10,68 @@ const nodemailer = require('nodemailer');
  * @returns {Promise<void>}
  */
 const sendEmail = async (options) => {
-  // Create transporter
-  // For development, use ethereal or console log
-  // For production, configure with your email service
+  console.log('=== sendEmail called ===');
+  console.log('To:', options.email);
+  console.log('Subject:', options.subject);
 
-  let transporter;
+  // Check if SMTP is configured
+  const smtpConfigured = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD;
+  console.log('SMTP configured:', smtpConfigured);
+  console.log('SMTP_HOST:', process.env.SMTP_HOST);
+  console.log('SMTP_USER:', process.env.SMTP_USER ? '***set***' : 'NOT SET');
 
-  if (process.env.NODE_ENV === 'production' && process.env.SMTP_HOST) {
-    // Production email configuration
-    transporter = nodemailer.createTransport({
+  if (smtpConfigured) {
+    // Create transporter with configured SMTP settings
+    const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT || 587,
+      port: parseInt(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: 'bniket2107@gma+il.com',
-        pass: 'xgve aqpy vvta rocs'
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD
       }
     });
+
+    // Prepare email options
+    const mailOptions = {
+      from: process.env.FROM_EMAIL || 'noreply@growthvalley.com',
+      to: options.email,
+      subject: options.subject,
+      text: options.message || '',
+      html: options.html || options.message
+    };
+
+    try {
+      // Send email
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Email sent successfully: %s', info.messageId);
+      return info;
+    } catch (error) {
+      console.error('Email sending failed:', error.message);
+      // Log to console as fallback
+      console.log('\n========== EMAIL FALLBACK (SMTP FAILED) ==========');
+      console.log('To:', options.email);
+      console.log('Subject:', options.subject);
+      console.log('Error:', error.message);
+      console.log('==================================================\n');
+      throw error;
+    }
   } else {
-    // Development - use console log or ethereal
-    // For testing, you can use ethereal.email
-    console.log('\n========== EMAIL SENT ==========');
+    // No SMTP configured - log to console
+    console.log('\n========== EMAIL SENT (CONSOLE LOG) ==========');
     console.log('To:', options.email);
     console.log('Subject:', options.subject);
     console.log('Reset URL:', options.resetUrl || 'N/A');
     console.log('Message:', options.message || options.html);
-    console.log('==================================\n');
+    console.log('==============================================\n');
 
-    // Return success in development mode
+    // Return success in development mode without SMTP
     return {
       success: true,
-      messageId: 'dev-mode-' + Date.now(),
-      message: 'Email logged to console (development mode)'
+      messageId: 'console-log-' + Date.now(),
+      message: 'Email logged to console (no SMTP configured)'
     };
   }
-
-  // Prepare email options
-  const mailOptions = {
-    from: process.env.FROM_EMAIL || 'noreply@growthvalley.com',
-    to: options.email,
-    subject: options.subject,
-    text: options.message || '',
-    html: options.html || options.message
-  };
-
-  // Send email
-  const info = await transporter.sendMail(mailOptions);
-
-  console.log('Email sent: %s', info.messageId);
-
-  return info;
 };
 
 module.exports = sendEmail;

@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const CreativeStrategy = require('../models/Creative');
 const { generateTasksFromStrategy } = require('../services/taskGenerationService');
+const emailService = require('../services/emailService');
 
 // Import centralized status constants
 const {
@@ -260,6 +261,13 @@ exports.createTask = async (req, res, next) => {
         projectId,
         organizationId: req.organizationId
       });
+
+      // Send email notification (async, don't block)
+      const assignedUser = await User.findById(assignedTo).select('name email');
+      if (assignedUser) {
+        emailService.sendTaskAssignmentNotification(task, project, assignedUser, req.user)
+          .catch(err => console.error('Failed to send task assignment email:', err));
+      }
     }
 
     res.status(201).json({

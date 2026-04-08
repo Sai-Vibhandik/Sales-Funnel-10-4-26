@@ -4,6 +4,7 @@ const Payment = require("../models/Payment");
 const Plan = require("../models/Plan");
 const User = require("../models/User");
 const Membership = require("../models/Membership");
+const emailService = require("../services/emailService");
 
 /**
  * Complete payment and create organization
@@ -174,6 +175,15 @@ const completePayment = async (req, res) => {
     session.endSession();
 
     console.log("✅ Payment complete:", { org: org._id, payment: payment._id });
+
+    // Send email notification (async, don't block)
+    console.log('=== Sending organization registration email ===');
+    console.log('Org:', org.name);
+    console.log('Owner:', user.name, user.email);
+    console.log('Plan:', plan.name);
+
+    emailService.sendOrgRegistrationNotification(org, user, plan)
+      .catch(err => console.error('Failed to send org registration notification:', err));
 
     res.json({
       success: true,
