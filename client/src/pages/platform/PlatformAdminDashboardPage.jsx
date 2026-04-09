@@ -57,6 +57,7 @@ const TABS = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'plans', label: 'Plans', icon: CreditCard },
   { id: 'prompts', label: 'Prompts', icon: FileText },
+  { id: 'sop-library', label: 'SOP Library', icon: BookOpen },
   { id: 'logs', label: 'Logs', icon: Activity },
 ];
 

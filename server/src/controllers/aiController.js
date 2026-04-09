@@ -3,6 +3,33 @@ const Prompt = require('../models/Prompt');
 const { generateContentBrief, checkAIHealth } = require('../services/aiService');
 const { getFrameworkTemplate } = require('../utils/frameworkTemplates');
 
+// Default template for UI/UX designers (when no framework is needed)
+const getUIDesignerTemplate = () => {
+  return `You are an expert UI/UX designer assistant. Generate a comprehensive design brief for a landing page or UI component based on the provided context.
+
+Analyze the requirements and create a detailed brief covering:
+1. Design Objectives - What the design should achieve
+2. Target User Considerations - User needs, behaviors, expectations
+3. Visual Style Guidelines - Colors, typography, imagery direction
+4. Layout Recommendations - Structure, hierarchy, key sections
+5. User Experience Flow - Navigation, interactions, micro-animations
+6. Responsive Considerations - Mobile, tablet, desktop adaptations
+7. Accessibility Requirements - WCAG compliance considerations
+8. Technical Constraints - Performance, browser compatibility
+
+Context Information:
+- Project: {projectName}
+- Business: {businessName}
+- Industry: {industry}
+- Task: {taskTitle}
+- Platform: {platform}
+- Funnel Stage: {funnelStage}
+- Target Audience: {targetAudience}
+- Offer: {offer}
+
+Generate a clear, actionable design brief that the designer can use as a foundation for their creative work.`;
+};
+
 // @desc    Generate AI Content Brief for a task
 // @route   POST /api/ai/generate-brief
 // @access  Private (Content Writer)
@@ -11,10 +38,26 @@ exports.generateContentBrief = async (req, res, next) => {
     const { taskId, frameworkType, promptId, approvedContent } = req.body;
 
     // Validate required fields
-    if (!taskId || !frameworkType) {
+    if (!taskId) {
       return res.status(400).json({
         success: false,
-        message: 'Task ID and framework type are required'
+        message: 'Task ID is required'
+      });
+    }
+
+    // Declare ALL role variables once at the top
+    const isUIDesigner = req.user.role === 'ui_ux_designer';
+    const isAdmin = req.user.role === 'admin';
+    const isPerformanceMarketer = req.user.role === 'performance_marketer';
+    const isContentWriter = req.user.role === 'content_writer' || req.user.role === 'content_creator';
+    const isGraphicDesigner = req.user.role === 'graphic_designer';
+    const isVideoEditor = req.user.role === 'video_editor';
+
+    // For non-UI designers, framework is required
+    if (!isUIDesigner && !frameworkType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Framework type is required'
       });
     }
 
@@ -27,11 +70,9 @@ exports.generateContentBrief = async (req, res, next) => {
       framework = String(framework).trim();
     }
 
-    if (!framework) {
-      return res.status(400).json({
-        success: false,
-        message: 'Framework type must be a valid string'
-      });
+    // For UI/UX designers without framework, use default template
+    if (isUIDesigner && !framework) {
+      framework = 'UI_DESIGN';
     }
 
     // Get the task with populated project
@@ -50,11 +91,8 @@ exports.generateContentBrief = async (req, res, next) => {
 
     // Verify user has access to this task
     const isAssignedUser = task.assignedTo?.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === 'admin';
-    const isPerformanceMarketer = req.user.role === 'performance_marketer';
-    const isContentWriter = req.user.role === 'content_writer' || req.user.role === 'content_creator';
 
-    if (!isAssignedUser && !isAdmin && !isPerformanceMarketer && !isContentWriter) {
+    if (!isAssignedUser && !isAdmin && !isPerformanceMarketer && !isContentWriter && !isGraphicDesigner && !isVideoEditor && !isUIDesigner) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this task'

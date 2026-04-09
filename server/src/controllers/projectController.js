@@ -6,6 +6,9 @@ const Membership = require('../models/Membership');
 const { getStageStatus, completeStage } = require('../middleware/stageGating');
 const UsageService = require('../services/usageService');
 const emailService = require('../services/emailService');
+const MarketResearch = require('../models/MarketResearch');
+const Offer = require('../models/Offer');
+const TrafficStrategy = require('../models/TrafficStrategy');
 
 // Helper to emit notification (will be set from index.js)
 let io = null;
@@ -34,7 +37,6 @@ const createNotification = async ({
       organizationId
     });
 
-    // Emit real-time notification via Socket.io
     if (io) {
       io.to(recipient.toString()).emit('notification', {
         _id: notification._id,
@@ -47,7 +49,6 @@ const createNotification = async ({
       });
     }
 
-    // Send email if requested
     if (sendEmail && emailData) {
       const recipientUser = await User.findById(recipient).select('name email');
       if (recipientUser) {
@@ -67,6 +68,150 @@ const createNotification = async ({
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED HELPER: checks if a userId is a performance marketer on the project,
+// handling BOTH the new array field and the legacy single field.
+// ─────────────────────────────────────────────────────────────────────────────
+const isPerformanceMarketer = (project, userId) => {
+  const team = project.assignedTeam || {};
+  const id = userId.toString();
+
+  // New array field
+  if (Array.isArray(team.performanceMarketers) && team.performanceMarketers.length > 0) {
+    if (team.performanceMarketers.some(m => (m._id || m).toString() === id)) return true;
+  }
+  // Legacy single field
+  if (team.performanceMarketer) {
+    if ((team.performanceMarketer._id || team.performanceMarketer).toString() === id) return true;
+  }
+  return false;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Generate tasks for a landing page when team assignments are made
+// This is called when adding or updating landing pages with team assignments
+// ─────────────────────────────────────────────────────────────────────────────
+const generateLandingPageTasksIfAssigned = async (project, landingPage, userId) => {
+  try {
+    // Check if tasks already exist for this landing page
+    const existingTasks = await Task.find({
+      projectId: project._id,
+      landingPageId: landingPage._id
+    });
+
+    if (existingTasks.length > 0) {
+      console.log(`Tasks already exist for landing page ${landingPage._id}, skipping task generation.`);
+      return existingTasks;
+    }
+
+    // Only generate tasks if team assignments are provided
+    const assignedDesignerId = landingPage.assignedDesigner?._id || landingPage.assignedDesigner;
+    const assignedDeveloperId = landingPage.assignedDeveloper?._id || landingPage.assignedDeveloper;
+
+    if (!assignedDesignerId && !assignedDeveloperId) {
+      console.log(`No team assignments for landing page ${landingPage._id}, skipping task generation.`);
+      return [];
+    }
+
+    // Get strategy context for AI prompt generation
+    const [marketResearch, offer, trafficStrategy] = await Promise.all([
+      MarketResearch.findOne({ projectId: project._id }),
+      Offer.findOne({ projectId: project._id }),
+      TrafficStrategy.findOne({ projectId: project._id })
+    ]);
+
+    // Build strategy context
+    const strategyContext = {
+      businessName: project.businessName || project.customerName,
+      industry: project.industry || '',
+      platform: landingPage.platform,
+      hook: landingPage.hook,
+      creativeAngle: landingPage.angle,
+      headline: landingPage.headline,
+      cta: landingPage.cta,
+      targetAudience: marketResearch?.targetAudience || '',
+      painPoints: marketResearch?.painPoints || [],
+      desires: marketResearch?.desires || [],
+      offer: offer?.bonuses?.map(b => b.title).join(', ') || ''
+    };
+
+    const tasks = [];
+    const contextLink = `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`;
+
+    // Create design task if designer is assigned
+    if (assignedDesignerId) {
+      const designTask = {
+        projectId: project._id,
+        organizationId: project.organizationId,
+        landingPageId: landingPage._id,
+        taskTitle: `Design: ${landingPage.name}`,
+        taskType: 'landing_page_design',
+        assetType: 'landing_page_design',
+        assignedRole: 'ui_ux_designer',
+        assignedTo: assignedDesignerId,
+        assignedBy: userId,
+        createdBy: userId,
+        status: 'design_pending',
+        strategyContext,
+        contextLink
+      };
+      tasks.push(designTask);
+    }
+
+    // Create development task if developer is assigned
+    if (assignedDeveloperId) {
+      const devTask = {
+        projectId: project._id,
+        organizationId: project.organizationId,
+        landingPageId: landingPage._id,
+        taskTitle: `Develop: ${landingPage.name}`,
+        taskType: 'landing_page_development',
+        assetType: 'landing_page_page',
+        assignedRole: 'developer',
+        assignedTo: null, // Assigned after design approval
+        developerId: assignedDeveloperId, // Stored for later assignment
+        assignedBy: userId,
+        createdBy: userId,
+        status: 'development_pending',
+        description: 'This task will become active after the design is approved.',
+        strategyContext,
+        contextLink
+      };
+      tasks.push(devTask);
+    }
+
+    if (tasks.length === 0) {
+      return [];
+    }
+
+    const createdTasks = await Task.insertMany(tasks);
+    console.log(`Created ${createdTasks.length} tasks for landing page ${landingPage.name || landingPage._id}`);
+
+    // Send notifications to assigned users
+    const notificationPromises = createdTasks
+      .filter(task => task.assignedTo)
+      .map(task =>
+        Notification.create({
+          recipient: task.assignedTo,
+          type: 'task_assigned',
+          title: 'New Task Assigned',
+          message: `You have been assigned a new task: "${task.taskTitle}" for landing page "${landingPage.name}"`,
+          projectId: project._id,
+          organizationId: project.organizationId,
+          taskId: task._id
+        })
+      );
+
+    await Promise.all(notificationPromises);
+
+    return createdTasks;
+  } catch (error) {
+    console.error('Error generating landing page tasks:', error);
+    // Don't throw - landing page should still be saved even if task creation fails
+    return [];
+  }
+};
+
 // @desc    Get all projects
 // @route   GET /api/projects
 // @access  Private
@@ -74,20 +219,11 @@ exports.getProjects = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status, search } = req.query;
 
-    console.log('=== getProjects DEBUG ===');
-    console.log('User ID:', req.user?._id?.toString());
-    console.log('User role:', req.user?.role);
-    console.log('User role type:', typeof req.user?.role);
-
-    // Build query - always filter by organization first
     let query = { organizationId: req.organizationId };
 
-    // If not admin, show projects where user is assigned or created by them
     if (req.user.role !== 'admin') {
-      console.log('Building non-admin query...');
       query.$or = [
         { createdBy: req.user._id },
-        // New array fields
         { 'assignedTeam.performanceMarketers': req.user._id },
         { 'assignedTeam.contentWriters': req.user._id },
         { 'assignedTeam.uiUxDesigners': req.user._id },
@@ -95,29 +231,16 @@ exports.getProjects = async (req, res, next) => {
         { 'assignedTeam.videoEditors': req.user._id },
         { 'assignedTeam.developers': req.user._id },
         { 'assignedTeam.testers': req.user._id },
-        // Legacy single fields
         { 'assignedTeam.performanceMarketer': req.user._id },
         { 'assignedTeam.uiUxDesigner': req.user._id },
         { 'assignedTeam.graphicDesigner': req.user._id },
         { 'assignedTeam.developer': req.user._id },
         { 'assignedTeam.tester': req.user._id }
       ];
-      console.log('Non-admin user query:', JSON.stringify(query, null, 2));
-    } else {
-      console.log('Admin user - showing all projects');
     }
 
-    // Filter by status
-    if (status) {
-      query.status = status;
-    }
-
-    // Filter by active status
-    if (req.query.isActive !== undefined) {
-      query.isActive = req.query.isActive === 'true';
-    }
-
-    // Search functionality
+    if (status) query.status = status;
+    if (req.query.isActive !== undefined) query.isActive = req.query.isActive === 'true';
     if (search) {
       query.$or = [
         { customerName: { $regex: search, $options: 'i' } },
@@ -132,7 +255,6 @@ exports.getProjects = async (req, res, next) => {
     const projects = await Project.find(query)
       .populate('createdBy', 'name email')
       .populate('client', 'customerName businessName email mobile industry address')
-      // New array fields
       .populate('assignedTeam.performanceMarketers', 'name email specialization avatar')
       .populate('assignedTeam.contentWriters', 'name email specialization avatar')
       .populate('assignedTeam.uiUxDesigners', 'name email specialization avatar')
@@ -140,7 +262,6 @@ exports.getProjects = async (req, res, next) => {
       .populate('assignedTeam.videoEditors', 'name email specialization avatar')
       .populate('assignedTeam.developers', 'name email specialization avatar')
       .populate('assignedTeam.testers', 'name email specialization avatar')
-      // Legacy single fields
       .populate('assignedTeam.performanceMarketer', 'name email specialization')
       .populate('assignedTeam.contentCreator', 'name email specialization')
       .populate('assignedTeam.contentWriter', 'name email specialization')
@@ -154,12 +275,6 @@ exports.getProjects = async (req, res, next) => {
 
     const total = await Project.countDocuments(query);
 
-    console.log('=== QUERY RESULT ===');
-    console.log('Query used:', JSON.stringify(query, null, 2));
-    console.log(`Found ${projects.length} projects for user ${req.user?._id}`);
-    console.log('=== END DEBUG ===');
-
-    // Add stage status to each project
     const projectsWithStatus = projects.map(project => ({
       ...project.toObject(),
       stageStatus: getStageStatus(project)
@@ -183,17 +298,12 @@ exports.getProjects = async (req, res, next) => {
 // @access  Private
 exports.getProject = async (req, res, next) => {
   try {
-    console.log('=== getProject called ===');
-    console.log('Project ID:', req.params.id);
-    console.log('Requesting user:', req.user?._id, req.user?.role);
-
     const project = await Project.findOne({
       _id: req.params.id,
       organizationId: req.organizationId
     })
       .populate('createdBy', 'name email')
       .populate('client', 'customerName businessName email mobile industry address')
-      // New array fields
       .populate('assignedTeam.performanceMarketers', 'name email specialization avatar')
       .populate('assignedTeam.contentWriters', 'name email specialization avatar')
       .populate('assignedTeam.uiUxDesigners', 'name email specialization avatar')
@@ -201,7 +311,6 @@ exports.getProject = async (req, res, next) => {
       .populate('assignedTeam.videoEditors', 'name email specialization avatar')
       .populate('assignedTeam.developers', 'name email specialization avatar')
       .populate('assignedTeam.testers', 'name email specialization avatar')
-      // Legacy single fields
       .populate('assignedTeam.performanceMarketer', 'name email specialization avatar')
       .populate('assignedTeam.contentCreator', 'name email specialization avatar')
       .populate('assignedTeam.contentWriter', 'name email specialization avatar')
@@ -211,38 +320,19 @@ exports.getProject = async (req, res, next) => {
       .populate('assignedTeam.tester', 'name email specialization avatar');
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Log assigned team data
-    console.log('=== Project Assigned Team ===');
-    if (project.assignedTeam) {
-      console.log('contentWriters:', project.assignedTeam.contentWriters?.map(m => ({ _id: m?._id?.toString(), name: m?.name })) || 'none');
-      console.log('graphicDesigners:', project.assignedTeam.graphicDesigners?.map(m => ({ _id: m?._id?.toString(), name: m?.name })) || 'none');
-      console.log('videoEditors:', project.assignedTeam.videoEditors?.map(m => ({ _id: m?._id?.toString(), name: m?.name })) || 'none');
-    } else {
-      console.log('No assignedTeam');
-    }
-
-    // Helper to check if user is in array or legacy field
     const isUserAssigned = (team, field, pluralField, userId) => {
-      // Check new array fields
-      if (pluralField && team[pluralField] && Array.isArray(team[pluralField])) {
-        if (team[pluralField].some(m => m._id?.toString() === userId)) {
-          return true;
-        }
+      if (pluralField && Array.isArray(team[pluralField])) {
+        if (team[pluralField].some(m => (m._id || m).toString() === userId)) return true;
       }
-      // Check legacy single field
-      if (team[field] && team[field]._id?.toString() === userId) {
-        return true;
+      if (team[field]) {
+        if ((team[field]._id || team[field]).toString() === userId) return true;
       }
       return false;
     };
 
-    // Check access - admin, creator, or assigned team member
     const userId = req.user._id.toString();
     const team = project.assignedTeam || {};
     const isAssigned =
@@ -255,13 +345,9 @@ exports.getProject = async (req, res, next) => {
       isUserAssigned(team, 'tester', 'testers', userId);
 
     if (req.user.role !== 'admin' && project.createdBy._id.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this project'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this project' });
     }
 
-    console.log('=== Returning project ===');
     res.status(200).json({
       success: true,
       data: {
@@ -270,7 +356,6 @@ exports.getProject = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('getProject error:', error);
     next(error);
   }
 };
@@ -281,70 +366,33 @@ exports.getProject = async (req, res, next) => {
 exports.createProject = async (req, res, next) => {
   try {
     const {
-      projectName,
-      customerName,
-      businessName,
-      mobile,
-      email,
-      industry,
-      address,
-      description,
-      budget,
-      timeline,
-      client
+      projectName, customerName, businessName, mobile, email,
+      industry, address, description, budget, timeline, client
     } = req.body;
 
-    // Create project with default stages
     const project = await Project.create({
-      client,
-      projectName,
-      customerName,
-      businessName,
-      mobile,
-      email,
-      industry,
-      address,
-      description,
-      budget,
-      timeline,
+      client, projectName, customerName, businessName, mobile, email,
+      industry, address, description, budget, timeline,
       organizationId: req.organizationId,
       createdBy: req.user._id,
       stages: {
-        onboarding: {
-          isCompleted: true,
-          completedAt: new Date()
-        },
-        marketResearch: {
-          isCompleted: false
-        },
-        offerEngineering: {
-          isCompleted: false
-        },
-        trafficStrategy: {
-          isCompleted: false
-        },
-        landingPage: {
-          isCompleted: false
-        },
-        creativeStrategy: {
-          isCompleted: false
-        }
+        onboarding: { isCompleted: true, completedAt: new Date() },
+        marketResearch: { isCompleted: false },
+        offerEngineering: { isCompleted: false },
+        trafficStrategy: { isCompleted: false },
+        landingPage: { isCompleted: false },
+        creativeStrategy: { isCompleted: false }
       }
     });
 
-    // Calculate initial progress
     project.calculateProgress();
     await project.save();
 
-    // Track usage - increment project count
     await UsageService.trackUsage(req.organizationId, 'projects', 1);
 
     res.status(201).json({
       success: true,
-      data: {
-        ...project.toObject(),
-        stageStatus: getStageStatus(project)
-      }
+      data: { ...project.toObject(), stageStatus: getStageStatus(project) }
     });
   } catch (error) {
     next(error);
@@ -357,36 +405,18 @@ exports.createProject = async (req, res, next) => {
 exports.updateProject = async (req, res, next) => {
   try {
     const {
-      projectName,
-      customerName,
-      businessName,
-      mobile,
-      email,
-      industry,
-      description,
-      budget,
-      timeline,
-      status
+      projectName, customerName, businessName, mobile, email,
+      industry, description, budget, timeline, status
     } = req.body;
 
-    let project = await Project.findOne({
-      _id: req.params.id,
-      organizationId: req.organizationId
-    });
+    let project = await Project.findOne({ _id: req.params.id, organizationId: req.organizationId });
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check ownership (admin can update any project in their org)
     if (req.user.role !== 'admin' && project.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this project'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to update this project' });
     }
 
     const fieldsToUpdate = {};
@@ -401,11 +431,8 @@ exports.updateProject = async (req, res, next) => {
     if (timeline) fieldsToUpdate.timeline = timeline;
     if (status) fieldsToUpdate.status = status;
 
-    project = await Project.findByIdAndUpdate(
-      req.params.id,
-      fieldsToUpdate,
-      { new: true, runValidators: true }
-    ).populate('createdBy', 'name email')
+    project = await Project.findByIdAndUpdate(req.params.id, fieldsToUpdate, { new: true, runValidators: true })
+      .populate('createdBy', 'name email')
       .populate('assignedTeam.performanceMarketer', 'name email specialization avatar')
       .populate('assignedTeam.uiUxDesigner', 'name email specialization avatar')
       .populate('assignedTeam.graphicDesigner', 'name email specialization avatar')
@@ -414,10 +441,7 @@ exports.updateProject = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: {
-        ...project.toObject(),
-        stageStatus: getStageStatus(project)
-      }
+      data: { ...project.toObject(), stageStatus: getStageStatus(project) }
     });
   } catch (error) {
     next(error);
@@ -429,33 +453,19 @@ exports.updateProject = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.deleteProject = async (req, res, next) => {
   try {
-    const project = await Project.findOne({
-      _id: req.params.id,
-      organizationId: req.organizationId
-    });
+    const project = await Project.findOne({ _id: req.params.id, organizationId: req.organizationId });
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Only admin can delete projects
-    // Note: authorize('admin') middleware already checks this, but we keep this as a safety check
     if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Only administrators can delete projects'
-      });
+      return res.status(403).json({ success: false, message: 'Only administrators can delete projects' });
     }
 
-    // Delete all related data
-    // 1. Delete tasks associated with the project
     const Task = require('../models/Task');
     await Task.deleteMany({ projectId: project._id });
 
-    // 2. Delete strategy documents
     const MarketResearch = require('../models/MarketResearch');
     const Offer = require('../models/Offer');
     const TrafficStrategy = require('../models/TrafficStrategy');
@@ -468,20 +478,14 @@ exports.deleteProject = async (req, res, next) => {
     await CreativeStrategy.deleteMany({ projectId: project._id });
     await LandingPage.deleteMany({ projectId: project._id });
 
-    // 3. Delete notifications related to this project
     const Notification = require('../models/Notification');
     await Notification.deleteMany({ projectId: project._id });
 
-    // 4. Delete the project itself
     await project.deleteOne();
 
-    // Track usage - decrement project count
     await UsageService.decreaseUsage(req.organizationId, 'projects', 1);
 
-    res.status(200).json({
-      success: true,
-      message: 'Project and all associated data deleted successfully'
-    });
+    res.status(200).json({ success: true, message: 'Project and all associated data deleted successfully' });
   } catch (error) {
     next(error);
   }
@@ -493,42 +497,17 @@ exports.deleteProject = async (req, res, next) => {
 exports.assignTeam = async (req, res, next) => {
   try {
     const {
-      // New array fields (multi-select)
-      performanceMarketers,
-      contentWriters,
-      uiUxDesigners,
-      graphicDesigners,
-      videoEditors,
-      developers,
-      testers,
-      // Legacy single fields (for backward compatibility)
-      performanceMarketer,
-      uiUxDesigner,
-      graphicDesigner,
-      developer,
-      tester
+      performanceMarketers, contentWriters, uiUxDesigners, graphicDesigners,
+      videoEditors, developers, testers,
+      performanceMarketer, uiUxDesigner, graphicDesigner, developer, tester
     } = req.body;
 
-    console.log('=== assignTeam called ===');
-    console.log('Project ID:', req.params.id);
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('contentWriters:', contentWriters);
-    console.log('graphicDesigners:', graphicDesigners);
-    console.log('videoEditors:', videoEditors);
-
-    const project = await Project.findOne({
-      _id: req.params.id,
-      organizationId: req.organizationId
-    });
+    const project = await Project.findOne({ _id: req.params.id, organizationId: req.organizationId });
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Collect all user IDs to validate
     const allUserIds = [
       ...(performanceMarketers || []),
       ...(contentWriters || []),
@@ -537,14 +516,9 @@ exports.assignTeam = async (req, res, next) => {
       ...(videoEditors || []),
       ...(developers || []),
       ...(testers || []),
-      performanceMarketer,
-      uiUxDesigner,
-      graphicDesigner,
-      developer,
-      tester
+      performanceMarketer, uiUxDesigner, graphicDesigner, developer, tester
     ].filter(Boolean);
 
-    // Validate that all team members belong to the same organization
     if (allUserIds.length > 0) {
       const validMemberships = await Membership.find({
         userId: { $in: allUserIds },
@@ -564,24 +538,13 @@ exports.assignTeam = async (req, res, next) => {
       }
     }
 
-    // Ensure performanceMarketers has at most one member
     let performanceMarketersArray = performanceMarketers || [];
-    if (performanceMarketersArray.length > 1) {
-      console.log('Warning: Multiple performance marketers provided, keeping only the first one');
-      performanceMarketersArray = [performanceMarketersArray[0]];
-    }
+    if (performanceMarketersArray.length > 1) performanceMarketersArray = [performanceMarketersArray[0]];
 
-    // Ensure testers has at most one member - single tester per project to avoid confusion in task assignment
     let testersArray = testers || [];
-    if (testersArray.length > 1) {
-      console.log('Warning: Multiple testers provided, keeping only the first one');
-      testersArray = [testersArray[0]];
-    }
+    if (testersArray.length > 1) testersArray = [testersArray[0]];
 
-    // Update assigned team - support both new array fields and legacy single fields
     project.assignedTeam = {
-      // New array fields (plural names)
-      // Performance Marketer is limited to ONE per project
       performanceMarketers: performanceMarketersArray,
       contentWriters: contentWriters || [],
       uiUxDesigners: uiUxDesigners || [],
@@ -589,7 +552,6 @@ exports.assignTeam = async (req, res, next) => {
       videoEditors: videoEditors || [],
       developers: developers || [],
       testers: testersArray,
-      // Legacy single fields (for backward compatibility)
       performanceMarketer: performanceMarketer || (performanceMarketersArray[0]) || null,
       contentCreator: req.body.contentCreator || null,
       contentWriter: req.body.contentWriter || (contentWriters && contentWriters[0]) || null,
@@ -602,53 +564,16 @@ exports.assignTeam = async (req, res, next) => {
 
     await project.save();
 
-    console.log('=== Team assignment saved ===');
-    console.log('Saved contentWriters:', project.assignedTeam?.contentWriters);
-    console.log('Saved graphicDesigners:', project.assignedTeam?.graphicDesigners);
-    console.log('Saved videoEditors:', project.assignedTeam?.videoEditors);
-
-    // Collect all unique user IDs for notifications
     const allAssignedIds = new Set();
     const addIds = (ids) => {
-      if (ids) {
-        (Array.isArray(ids) ? ids : [ids]).forEach(id => {
-          if (id) allAssignedIds.add(id.toString());
-        });
-      }
+      if (ids) (Array.isArray(ids) ? ids : [ids]).forEach(id => { if (id) allAssignedIds.add(id.toString()); });
     };
 
-    addIds(performanceMarketers);
-    addIds(contentWriters);
-    addIds(uiUxDesigners);
-    addIds(graphicDesigners);
-    addIds(videoEditors);
-    addIds(developers);
-    addIds(testers);
-    addIds(performanceMarketer);
-    addIds(uiUxDesigner);
-    addIds(graphicDesigner);
-    addIds(developer);
-    addIds(tester);
+    addIds(performanceMarketers); addIds(contentWriters); addIds(uiUxDesigners);
+    addIds(graphicDesigners); addIds(videoEditors); addIds(developers); addIds(testers);
+    addIds(performanceMarketer); addIds(uiUxDesigner); addIds(graphicDesigner);
+    addIds(developer); addIds(tester);
 
-    // Get role labels for notifications
-    const roleLabels = {
-      performanceMarketer: 'Performance Marketer',
-      performanceMarketers: 'Performance Marketer',
-      contentWriter: 'Content Planner',
-      contentWriters: 'Content Planner',
-      uiUxDesigner: 'UI/UX Designer',
-      uiUxDesigners: 'UI/UX Designer',
-      graphicDesigner: 'Graphic Designer',
-      graphicDesigners: 'Graphic Designer',
-      videoEditor: 'Video Editor',
-      videoEditors: 'Video Editor',
-      developer: 'Developer',
-      developers: 'Developer',
-      tester: 'Tester',
-      testers: 'Tester'
-    };
-
-    // Get user's role in this assignment
     const getUserRole = (userId) => {
       const id = userId.toString();
       if (performanceMarketers?.some(m => m.toString() === id) || performanceMarketer?.toString() === id) return 'performance_marketer';
@@ -661,9 +586,7 @@ exports.assignTeam = async (req, res, next) => {
       return 'team_member';
     };
 
-    // Send notifications to assigned team members
     for (const userId of allAssignedIds) {
-      const userRole = getUserRole(userId);
       await createNotification({
         recipient: userId,
         type: 'project_assigned',
@@ -672,15 +595,10 @@ exports.assignTeam = async (req, res, next) => {
         projectId: project._id,
         organizationId: project.organizationId,
         sendEmail: true,
-        emailData: {
-          project,
-          role: userRole,
-          assignedBy: req.user
-        }
+        emailData: { project, role: getUserRole(userId), assignedBy: req.user }
       });
     }
 
-    // Populate team details (both new and legacy fields)
     await project.populate('assignedTeam.performanceMarketers', 'name email specialization avatar');
     await project.populate('assignedTeam.contentWriters', 'name email specialization avatar');
     await project.populate('assignedTeam.uiUxDesigners', 'name email specialization avatar');
@@ -688,10 +606,7 @@ exports.assignTeam = async (req, res, next) => {
     await project.populate('assignedTeam.videoEditors', 'name email specialization avatar');
     await project.populate('assignedTeam.developers', 'name email specialization avatar');
     await project.populate('assignedTeam.testers', 'name email specialization avatar');
-    // Legacy fields
     await project.populate('assignedTeam.performanceMarketer', 'name email specialization avatar');
-    await project.populate('assignedTeam.contentCreator', 'name email specialization avatar');
-    await project.populate('assignedTeam.contentWriter', 'name email specialization avatar');
     await project.populate('assignedTeam.uiUxDesigner', 'name email specialization avatar');
     await project.populate('assignedTeam.graphicDesigner', 'name email specialization avatar');
     await project.populate('assignedTeam.developer', 'name email specialization avatar');
@@ -699,10 +614,7 @@ exports.assignTeam = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: {
-        ...project.toObject(),
-        stageStatus: getStageStatus(project)
-      }
+      data: { ...project.toObject(), stageStatus: getStageStatus(project) }
     });
   } catch (error) {
     next(error);
@@ -715,23 +627,15 @@ exports.assignTeam = async (req, res, next) => {
 exports.toggleProjectActivation = async (req, res, next) => {
   try {
     const { isActive } = req.body;
-
-    const project = await Project.findOne({
-      _id: req.params.id,
-      organizationId: req.organizationId
-    });
+    const project = await Project.findOne({ _id: req.params.id, organizationId: req.organizationId });
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
     project.isActive = isActive;
     await project.save();
 
-    // Notify assigned team members when project is activated
     if (isActive) {
       const teamMembers = [
         project.assignedTeam.performanceMarketer,
@@ -746,17 +650,14 @@ exports.toggleProjectActivation = async (req, res, next) => {
           recipient: memberId,
           type: 'project_activated',
           title: 'Project Activated',
-          message: `Project "${project.projectName || project.businessName}" is now active. You can start working on it.`,
+          message: `Project "${project.projectName || project.businessName}" is now active.`,
           projectId: project._id,
           organizationId: project.organizationId
         });
       }
     }
 
-    res.status(200).json({
-      success: true,
-      data: project
-    });
+    res.status(200).json({ success: true, data: project });
   } catch (error) {
     next(error);
   }
@@ -767,19 +668,12 @@ exports.toggleProjectActivation = async (req, res, next) => {
 // @access  Private
 exports.uploadAssets = async (req, res, next) => {
   try {
-    const project = await Project.findOne({
-      _id: req.params.id,
-      organizationId: req.organizationId
-    });
+    const project = await Project.findOne({ _id: req.params.id, organizationId: req.organizationId });
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check access
     const userId = req.user._id.toString();
     const isAssigned =
       project.assignedTeam.performanceMarketer?._id?.toString() === userId ||
@@ -789,20 +683,13 @@ exports.uploadAssets = async (req, res, next) => {
       project.assignedTeam.tester?._id?.toString() === userId;
 
     if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to upload assets to this project'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to upload assets' });
     }
 
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No files uploaded'
-      });
+      return res.status(400).json({ success: false, message: 'No files uploaded' });
     }
 
-    // Add uploaded files to project's brand assets
     const newAssets = req.files.map(file => ({
       fileName: file.originalname,
       filePath: file.path,
@@ -813,10 +700,7 @@ exports.uploadAssets = async (req, res, next) => {
     project.brandAssets = [...project.brandAssets, ...newAssets];
     await project.save();
 
-    res.status(200).json({
-      success: true,
-      data: project.brandAssets
-    });
+    res.status(200).json({ success: true, data: project.brandAssets });
   } catch (error) {
     next(error);
   }
@@ -829,7 +713,6 @@ exports.getAssignedProjects = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
 
-    // Build query - always filter by organization
     let query = {
       organizationId: req.organizationId,
       $or: [
@@ -841,23 +724,14 @@ exports.getAssignedProjects = async (req, res, next) => {
       ]
     };
 
-    // Filter by status
-    if (status) {
-      query.status = status;
-    }
-
-    // Filter by active status
-    if (req.query.isActive !== undefined) {
-      query.isActive = req.query.isActive === 'true';
-    }
+    if (status) query.status = status;
+    if (req.query.isActive !== undefined) query.isActive = req.query.isActive === 'true';
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const projects = await Project.find(query)
       .populate('createdBy', 'name email')
       .populate('assignedTeam.performanceMarketer', 'name email specialization')
-      .populate('assignedTeam.contentCreator', 'name email specialization')
-      .populate('assignedTeam.contentWriter', 'name email specialization')
       .populate('assignedTeam.uiUxDesigner', 'name email specialization')
       .populate('assignedTeam.graphicDesigner', 'name email specialization')
       .populate('assignedTeam.developer', 'name email specialization')
@@ -868,19 +742,13 @@ exports.getAssignedProjects = async (req, res, next) => {
 
     const total = await Project.countDocuments(query);
 
-    // Add stage status to each project
-    const projectsWithStatus = projects.map(project => ({
-      ...project.toObject(),
-      stageStatus: getStageStatus(project)
-    }));
-
     res.status(200).json({
       success: true,
       count: projects.length,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: projectsWithStatus
+      data: projects.map(p => ({ ...p.toObject(), stageStatus: getStageStatus(p) }))
     });
   } catch (error) {
     next(error);
@@ -892,24 +760,14 @@ exports.getAssignedProjects = async (req, res, next) => {
 // @access  Private
 exports.getProjectProgress = async (req, res, next) => {
   try {
-    const project = await Project.findOne({
-      _id: req.params.id,
-      organizationId: req.organizationId
-    });
+    const project = await Project.findOne({ _id: req.params.id, organizationId: req.organizationId });
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check ownership
     if (req.user.role !== 'admin' && project.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this project'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
     res.status(200).json({
@@ -930,11 +788,9 @@ exports.getProjectProgress = async (req, res, next) => {
 // @access  Private
 exports.getDashboardStats = async (req, res, next) => {
   try {
-    // Build query based on user role - always filter by organization
     let query = { organizationId: req.organizationId };
 
     if (req.user.role !== 'admin') {
-      // For non-admins, show assigned projects
       query.$or = [
         { createdBy: req.user._id },
         { 'assignedTeam.performanceMarketer': req.user._id },
@@ -946,21 +802,15 @@ exports.getDashboardStats = async (req, res, next) => {
     }
 
     const [
-      totalProjects,
-      activeProjects,
-      pausedProjects,
-      completedProjects,
-      archivedProjects,
-      recentProjects
+      totalProjects, activeProjects, pausedProjects,
+      completedProjects, archivedProjects, recentProjects
     ] = await Promise.all([
       Project.countDocuments(query),
       Project.countDocuments({ ...query, status: 'active' }),
       Project.countDocuments({ ...query, status: 'paused' }),
       Project.countDocuments({ ...query, status: 'completed' }),
       Project.countDocuments({ ...query, status: 'archived' }),
-      Project.find(query)
-        .sort({ updatedAt: -1 })
-        .limit(5)
+      Project.find(query).sort({ updatedAt: -1 }).limit(5)
         .populate('createdBy', 'name')
         .populate('assignedTeam.performanceMarketer', 'name')
         .populate('assignedTeam.uiUxDesigner', 'name')
@@ -969,7 +819,6 @@ exports.getDashboardStats = async (req, res, next) => {
         .populate('assignedTeam.tester', 'name')
     ]);
 
-    // Get projects by stage
     const projectsByStage = await Project.aggregate([
       { $match: query },
       { $group: { _id: '$currentStage', count: { $sum: 1 } } },
@@ -979,13 +828,8 @@ exports.getDashboardStats = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {
-        totalProjects,
-        activeProjects,
-        pausedProjects,
-        completedProjects,
-        archivedProjects,
-        recentProjects,
-        projectsByStage
+        totalProjects, activeProjects, pausedProjects,
+        completedProjects, archivedProjects, recentProjects, projectsByStage
       }
     });
   } catch (error) {
@@ -993,7 +837,6 @@ exports.getDashboardStats = async (req, res, next) => {
   }
 };
 
-// Export setIO for use in other modules
 exports.setIO = setIO;
 exports.createNotification = createNotification;
 
@@ -1007,30 +850,30 @@ exports.createNotification = createNotification;
 exports.addLandingPage = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, funnelType, platform, hook, angle, cta, offer, messaging, leadCaptureMethod, headline, subheadline, assignedDesigner, assignedDeveloper } = req.body;
+    const {
+      name, funnelType, platform, hook, angle, cta, offer,
+      messaging, leadCaptureMethod, headline, subheadline,
+      assignedDesigner, assignedDeveloper
+    } = req.body;
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    });
+    // ─────────────────────────────────────────────────────────────────────
+    // FIX: populate team fields so isPerformanceMarketer() can compare _id
+    // ─────────────────────────────────────────────────────────────────────
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId })
+      .populate('assignedTeam.performanceMarketers', '_id')
+      .populate('assignedTeam.performanceMarketer', '_id');
+
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check access
     const userId = req.user._id.toString();
-    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
-    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to add landing pages to this project'
-      });
+
+    // FIX: use shared helper that checks BOTH array and legacy field
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isPerformanceMarketer(project, userId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to add landing pages to this project' });
     }
 
-    // Create new landing page object
     const newLandingPage = {
       name: name || `Landing Page ${project.landingPages.length + 1}`,
       funnelType: funnelType || 'video_sales_letter',
@@ -1052,9 +895,17 @@ exports.addLandingPage = async (req, res, next) => {
     project.landingPages.push(newLandingPage);
     await project.save();
 
+    // Get the newly added landing page (it's the last one in the array)
+    const addedLandingPage = project.landingPages[project.landingPages.length - 1];
+
+    // Generate tasks if team assignments are provided
+    if (assignedDesigner || assignedDeveloper) {
+      await generateLandingPageTasksIfAssigned(project, addedLandingPage, req.user._id);
+    }
+
     res.status(201).json({
       success: true,
-      data: project.landingPages[project.landingPages.length - 1]
+      data: addedLandingPage
     });
   } catch (error) {
     next(error);
@@ -1067,39 +918,26 @@ exports.addLandingPage = async (req, res, next) => {
 exports.getLandingPages = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId });
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    });
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check access
     const userId = req.user._id.toString();
+    const team = project.assignedTeam || {};
     const isAssigned =
-      project.assignedTeam.performanceMarketer?._id?.toString() === userId ||
-      project.assignedTeam.uiUxDesigner?._id?.toString() === userId ||
-      project.assignedTeam.graphicDesigner?._id?.toString() === userId ||
-      project.assignedTeam.developer?._id?.toString() === userId ||
-      project.assignedTeam.tester?._id?.toString() === userId;
+      (team.performanceMarketer?._id || team.performanceMarketer)?.toString() === userId ||
+      (Array.isArray(team.performanceMarketers) && team.performanceMarketers.some(m => (m._id || m).toString() === userId)) ||
+      (team.uiUxDesigner?._id || team.uiUxDesigner)?.toString() === userId ||
+      (team.developer?._id || team.developer)?.toString() === userId ||
+      (team.tester?._id || team.tester)?.toString() === userId;
 
     if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this project'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    res.status(200).json({
-      success: true,
-      count: project.landingPages.length,
-      data: project.landingPages
-    });
+    res.status(200).json({ success: true, count: project.landingPages.length, data: project.landingPages });
   } catch (error) {
     next(error);
   }
@@ -1111,30 +949,14 @@ exports.getLandingPages = async (req, res, next) => {
 exports.getLandingPage = async (req, res, next) => {
   try {
     const { id, landingPageId } = req.params;
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId });
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    });
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
-    }
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
 
     const landingPage = project.landingPages.id(landingPageId);
-    if (!landingPage) {
-      return res.status(404).json({
-        success: false,
-        message: 'Landing page not found'
-      });
-    }
+    if (!landingPage) return res.status(404).json({ success: false, message: 'Landing page not found' });
 
-    res.status(200).json({
-      success: true,
-      data: landingPage
-    });
+    res.status(200).json({ success: true, data: landingPage });
   } catch (error) {
     next(error);
   }
@@ -1146,38 +968,32 @@ exports.getLandingPage = async (req, res, next) => {
 exports.updateLandingPage = async (req, res, next) => {
   try {
     const { id, landingPageId } = req.params;
-    const { name, funnelType, platform, hook, angle, cta, offer, messaging, leadCaptureMethod, headline, subheadline, assignedDesigner, assignedDeveloper } = req.body;
+    const {
+      name, funnelType, platform, hook, angle, cta, offer,
+      messaging, leadCaptureMethod, headline, subheadline,
+      assignedDesigner, assignedDeveloper
+    } = req.body;
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    });
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
-    }
+    // FIX: populate so isPerformanceMarketer() works correctly
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId })
+      .populate('assignedTeam.performanceMarketers', '_id')
+      .populate('assignedTeam.performanceMarketer', '_id');
 
-    // Check access
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+
     const userId = req.user._id.toString();
-    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
-    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update landing pages in this project'
-      });
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isPerformanceMarketer(project, userId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update landing pages' });
     }
 
     const landingPage = project.landingPages.id(landingPageId);
-    if (!landingPage) {
-      return res.status(404).json({
-        success: false,
-        message: 'Landing page not found'
-      });
-    }
+    if (!landingPage) return res.status(404).json({ success: false, message: 'Landing page not found' });
 
-    // Update fields
+    // Track if team assignments changed
+    const teamAssignmentChanged =
+      (assignedDesigner !== undefined && assignedDesigner !== (landingPage.assignedDesigner?._id?.toString() || landingPage.assignedDesigner?.toString())) ||
+      (assignedDeveloper !== undefined && assignedDeveloper !== (landingPage.assignedDeveloper?._id?.toString() || landingPage.assignedDeveloper?.toString()));
+
     if (name !== undefined) landingPage.name = name;
     if (funnelType !== undefined) landingPage.funnelType = funnelType;
     if (platform !== undefined) landingPage.platform = platform;
@@ -1195,10 +1011,12 @@ exports.updateLandingPage = async (req, res, next) => {
 
     await project.save();
 
-    res.status(200).json({
-      success: true,
-      data: landingPage
-    });
+    // Generate tasks if team assignments are provided and no tasks exist yet
+    if ((assignedDesigner || assignedDeveloper) && teamAssignmentChanged) {
+      await generateLandingPageTasksIfAssigned(project, landingPage, req.user._id);
+    }
+
+    res.status(200).json({ success: true, data: landingPage });
   } catch (error) {
     next(error);
   }
@@ -1211,43 +1029,25 @@ exports.deleteLandingPage = async (req, res, next) => {
   try {
     const { id, landingPageId } = req.params;
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    });
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
-    }
+    // FIX: populate so isPerformanceMarketer() works correctly
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId })
+      .populate('assignedTeam.performanceMarketers', '_id')
+      .populate('assignedTeam.performanceMarketer', '_id');
 
-    // Check access
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+
     const userId = req.user._id.toString();
-    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
-    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete landing pages in this project'
-      });
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isPerformanceMarketer(project, userId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete landing pages' });
     }
 
     const landingPage = project.landingPages.id(landingPageId);
-    if (!landingPage) {
-      return res.status(404).json({
-        success: false,
-        message: 'Landing page not found'
-      });
-    }
+    if (!landingPage) return res.status(404).json({ success: false, message: 'Landing page not found' });
 
-    // Remove landing page
     project.landingPages.pull(landingPageId);
     await project.save();
 
-    res.status(200).json({
-      success: true,
-      message: 'Landing page deleted successfully'
-    });
+    res.status(200).json({ success: true, message: 'Landing page deleted successfully' });
   } catch (error) {
     next(error);
   }
@@ -1260,42 +1060,34 @@ exports.completeLandingPageStage = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    })
-      // New array fields
-      .populate('assignedTeam.uiUxDesigners', '_id name email')
-      .populate('assignedTeam.developers', '_id name email')
-      .populate('assignedTeam.testers', '_id name email')
+    // ─────────────────────────────────────────────────────────────────────
+    // FIX: populate ALL team fields needed for task creation AND auth check
+    //      in a single query — the original code only populated some fields
+    //      which caused uiuxDesigners to resolve as empty.
+    // ─────────────────────────────────────────────────────────────────────
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId })
       .populate('assignedTeam.performanceMarketers', '_id name email')
-      // Legacy fields
-      .populate('assignedTeam.uiUxDesigner', '_id name email')
-      .populate('assignedTeam.developer', '_id name email')
-      .populate('assignedTeam.tester', '_id name email')
-      .populate('assignedTeam.performanceMarketer', '_id name email');
+      .populate('assignedTeam.performanceMarketer',  '_id name email')
+      .populate('assignedTeam.uiUxDesigners',        '_id name email')
+      .populate('assignedTeam.uiUxDesigner',         '_id name email')
+      .populate('assignedTeam.developers',           '_id name email')
+      .populate('assignedTeam.developer',            '_id name email')
+      .populate('assignedTeam.testers',              '_id name email')
+      .populate('assignedTeam.tester',               '_id name email');
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check access
     const userId = req.user._id.toString();
-    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
-    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to complete this stage'
-      });
+
+    // FIX: use shared helper that checks BOTH array and legacy field
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isPerformanceMarketer(project, userId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to complete this stage' });
     }
 
-    // Landing pages are embedded in the Project document
     const landingPages = project.landingPages || [];
 
-    // Check if there are landing pages
     if (landingPages.length === 0) {
       return res.status(400).json({
         success: false,
@@ -1303,14 +1095,80 @@ exports.completeLandingPageStage = async (req, res, next) => {
       });
     }
 
-    // Check if tasks already exist for this project's landing pages
+    // ─────────────────────────────────────────────────────────────────────
+    // FIX: resolve UI/UX designers from BOTH new array field and legacy
+    //      single field — this is the critical fix for tasks not being created
+    // ─────────────────────────────────────────────────────────────────────
+    const uiuxDesigners =
+      (project.assignedTeam?.uiUxDesigners?.length > 0)
+        ? project.assignedTeam.uiUxDesigners
+        : project.assignedTeam?.uiUxDesigner
+          ? [project.assignedTeam.uiUxDesigner]
+          : [];
+
+    // Resolve developer the same way
+    const developerEntry =
+      project.assignedTeam?.developers?.[0] ||
+      project.assignedTeam?.developer ||
+      null;
+    const developerId = developerEntry?._id || developerEntry || null;
+
+    console.log('=== completeLandingPageStage: team resolution ===');
+    console.log('uiUxDesigners (array):', JSON.stringify(project.assignedTeam?.uiUxDesigners?.map(d => ({ id: d._id, name: d.name }))));
+    console.log('uiUxDesigner (legacy):', JSON.stringify(project.assignedTeam?.uiUxDesigner));
+    console.log('Resolved uiuxDesigners count:', uiuxDesigners.length);
+    console.log('Resolved developerId:', developerId);
+
+    // Allow Performance Marketer to complete stage without requiring UI/UX Designer or Developer
+    // Tasks will be created when those roles are assigned later
+    // if (uiuxDesigners.length === 0) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'No UI/UX Designer is assigned to this project. Please ask the admin to assign one before completing this stage.'
+    //   });
+    // }
+
+    // if (!developerId) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'No Developer is assigned to this project. Please ask the admin to assign one before completing this stage.'
+    //   });
+    // }
+
+    // Only create tasks if team members are assigned
+    // If no UI/UX Designer or Developer, skip task creation - Performance Marketer can complete stage without them
+    if (uiuxDesigners.length === 0 || !developerId) {
+      console.log('=== completeLandingPageStage: Skipping task creation - missing team members ===');
+      console.log('UI/UX Designers:', uiuxDesigners.length);
+      console.log('Developer:', developerId ? 'assigned' : 'not assigned');
+
+      // Mark stage as complete without creating tasks
+      project.stages = project.stages || {};
+      project.stages.landingPage = {
+        isCompleted: true,
+        completedAt: new Date(),
+        completedBy: req.user._id
+      };
+      project.currentStage = 'creativeStrategy';
+      await project.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Landing page stage completed. Tasks will be created when team members are assigned.',
+        tasksCreated: [],
+        skippedTaskCreation: true
+      });
+    }
+
+    // Find existing tasks to avoid duplicates
     const existingTasks = await Task.find({
       projectId: id,
       taskType: { $in: ['landing_page_design', 'landing_page_development'] }
     });
-    const existingLandingPageIds = existingTasks.map(t => t.landingPageId?.toString()).filter(Boolean);
+    const existingLandingPageIds = new Set(
+      existingTasks.map(t => t.landingPageId?.toString()).filter(Boolean)
+    );
 
-    // Get strategy context for task generation
     const MarketResearch = require('../models/MarketResearch');
     const Offer = require('../models/Offer');
     const TrafficStrategy = require('../models/TrafficStrategy');
@@ -1322,16 +1180,14 @@ exports.completeLandingPageStage = async (req, res, next) => {
     ]);
 
     const tasksCreated = [];
+    const contextLink = `${process.env.CLIENT_URL}/projects/${id}/strategy-summary`;
 
-    // Generate tasks for each landing page that doesn't have tasks yet
     for (const landingPage of landingPages) {
-      // Skip if tasks already exist for this landing page
-      if (existingLandingPageIds.includes(landingPage._id.toString())) {
-        console.log(`Skipping landing page ${landingPage.name} - tasks already exist`);
+      if (existingLandingPageIds.has(landingPage._id.toString())) {
+        console.log(`Skipping landing page "${landingPage.name}" — tasks already exist`);
         continue;
       }
 
-      // Build strategy context
       const strategyContext = {
         businessName: project.businessName || project.customerName,
         industry: project.industry || '',
@@ -1346,43 +1202,74 @@ exports.completeLandingPageStage = async (req, res, next) => {
         offer: offer?.bonuses?.map(b => b.title).join(', ') || ''
       };
 
-      const contextLink = `${process.env.CLIENT_URL}/projects/${id}/strategy-summary`;
+      // Use the landing page's assignedDesigner if set, otherwise fall back to project's assignedTeam
+      // This is the fix: respect the Performance Marketer's specific designer assignment per landing page
+      const landingPageDesignerId = landingPage.assignedDesigner?._id ||
+                                     landingPage.assignedDesigner?.toString() ||
+                                     landingPage.assignedDesigner ||
+                                     null;
 
-      // Get UI/UX designer from either new array field or legacy field
-      const uiuxDesignerId = project.assignedTeam?.uiUxDesigners?.[0]?._id ||
-                              project.assignedTeam?.uiUxDesigners?.[0] ||
-                              project.assignedTeam?.uiUxDesigner?._id ||
-                              project.assignedTeam?.uiUxDesigner ||
-                              null;
+      // Resolve designer ID - either from landing page or project team
+      let designerIdToAssign = landingPageDesignerId;
 
-      // Get developer from either new array field or legacy field
-      // IMPORTANT: Developer is NOT assigned here. They will be assigned when design is approved by marketer.
-      const developerId = project.assignedTeam?.developers?.[0]?._id ||
-                          project.assignedTeam?.developers?.[0] ||
-                          project.assignedTeam?.developer?._id ||
-                          project.assignedTeam?.developer ||
-                          null;
+      // If no landing page specific designer, use project team designers
+      if (!designerIdToAssign && uiuxDesigners.length > 0) {
+        designerIdToAssign = uiuxDesigners[0]._id || uiuxDesigners[0];
+      }
 
-      // Create design task for UI/UX Designer
-      const designTask = {
-        projectId: id,
-        organizationId: project.organizationId,
-        landingPageId: landingPage._id,
-        taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
-        taskType: 'landing_page_design',
-        assetType: 'landing_page_design',
-        assignedRole: 'ui_ux_designer',
-        assignedTo: uiuxDesignerId,
-        assignedBy: userId,
-        createdBy: userId,
-        status: 'design_pending',
-        strategyContext,
-        contextLink
-      };
+      console.log(`Creating design task for landing page: "${landingPage.name}"`);
+      console.log(`Landing page assignedDesigner: ${landingPage.assignedDesigner}`);
+      console.log(`Resolved designerIdToAssign: ${designerIdToAssign}`);
 
-      // Create development task for Developer
-      // IMPORTANT: Developer is NOT assigned here. They will be assigned when design is approved by marketer.
-      const devTask = {
+      if (designerIdToAssign) {
+        const designTask = await Task.create({
+          projectId: id,
+          organizationId: project.organizationId,
+          landingPageId: landingPage._id,
+          taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
+          taskType: 'landing_page_design',
+          assetType: 'landing_page_design',
+          assignedRole: 'ui_ux_designer',
+          assignedTo: designerIdToAssign,
+          assignedBy: userId,
+          createdBy: userId,
+          status: 'design_pending',
+          strategyContext,
+          contextLink
+        });
+
+        tasksCreated.push(designTask);
+
+        await createNotification({
+          recipient: designerIdToAssign,
+          type: 'task_assigned',
+          title: 'New Landing Page Design Task',
+          message: `You have been assigned a design task: "${landingPage.name || 'Landing Page'}" for project "${project.projectName || project.businessName}"`,
+          projectId: project._id,
+          organizationId: project.organizationId,
+          sendEmail: true,
+          emailData: { project, role: 'ui_ux_designer', assignedBy: req.user }
+        });
+
+        console.log(`Design task created and notification sent to designer: ${designerIdToAssign}`);
+      } else {
+        console.log(`No designer assigned for landing page "${landingPage.name}" - skipping design task`);
+      }
+
+      // Use the landing page's assignedDeveloper if set, otherwise fall back to project's assignedTeam
+      const landingPageDeveloperId = landingPage.assignedDeveloper?._id ||
+                                     landingPage.assignedDeveloper?.toString() ||
+                                     landingPage.assignedDeveloper ||
+                                     null;
+
+      // Resolve developer ID - either from landing page or project team
+      const developerIdToAssign = landingPageDeveloperId || developerId;
+
+      console.log(`Landing page assignedDeveloper: ${landingPage.assignedDeveloper}`);
+      console.log(`Resolved developerIdToAssign: ${developerIdToAssign}`);
+
+      // Create development task (unassigned until design is approved, but store developer for later)
+      const devTask = await Task.create({
         projectId: id,
         organizationId: project.organizationId,
         landingPageId: landingPage._id,
@@ -1390,44 +1277,24 @@ exports.completeLandingPageStage = async (req, res, next) => {
         taskType: 'landing_page_development',
         assetType: 'landing_page_page',
         assignedRole: 'developer',
-        assignedTo: null,  // Developer will be assigned when design is approved
-        developerId: developerId,  // Store for later assignment
+        assignedTo: null,
+        developerId: developerIdToAssign,
         assignedBy: userId,
         createdBy: userId,
         status: 'development_pending',
-        description: 'This task will become active after the design is approved by the tester and marketer.',
+        description: 'This task will become active after the design is approved.',
         strategyContext,
         contextLink
-      };
+      });
 
-      const createdTasks = await Task.insertMany([designTask, devTask]);
-
-      // Send notifications for assigned users
-      for (const task of createdTasks) {
-        if (task.assignedTo) {
-          await Notification.create({
-            recipient: task.assignedTo,
-            type: 'task_assigned',
-            title: 'New Task Assigned',
-            message: `You have been assigned a new task: "${task.taskTitle}" for landing page "${landingPage.name}"`,
-            projectId: id,
-            organizationId: project.organizationId,
-            taskId: task._id
-          });
-        }
-      }
-
-      tasksCreated.push(...createdTasks);
+      tasksCreated.push(devTask);
     }
 
-    console.log(`Created ${tasksCreated.length} landing page tasks for project ${project.businessName || project.customerName}`);
+    console.log(`Total tasks created: ${tasksCreated.length}`);
 
-    // Mark the landing page stage as complete and update currentStage
     project.stages.landingPage.isCompleted = true;
     project.stages.landingPage.completedAt = new Date();
-    project.currentStage = 6; // Move to Creative Strategy stage
-
-    // Calculate progress
+    project.currentStage = 6;
     project.calculateProgress();
     await project.save();
 
@@ -1445,55 +1312,38 @@ exports.completeLandingPageStage = async (req, res, next) => {
   }
 };
 
-// @desc    Skip landing page stage (no landing pages required)
+// @desc    Skip landing page stage
 // @route   POST /api/projects/:id/landing-pages/skip
 // @access  Private (Admin, Performance Marketer)
 exports.skipLandingPageStage = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const project = await Project.findOne({
-      _id: id,
-      organizationId: req.organizationId
-    });
+    // FIX: populate so isPerformanceMarketer() works correctly
+    const project = await Project.findOne({ _id: id, organizationId: req.organizationId })
+      .populate('assignedTeam.performanceMarketers', '_id')
+      .populate('assignedTeam.performanceMarketer', '_id');
 
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project not found'
-      });
+      return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    // Check access
     const userId = req.user._id.toString();
-    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
-    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to complete this stage'
-      });
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isPerformanceMarketer(project, userId)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to skip this stage' });
     }
 
-    // Mark the landing page stage as complete with skip flag
     project.stages.landingPage.isCompleted = true;
     project.stages.landingPage.completedAt = new Date();
-    project.stages.landingPage.skipped = true; // Flag to indicate this stage was skipped
-
-    // Update currentStage to next stage (creative strategy = stage 6)
-    // If landing page is stage 5, currentStage should be set to 6 after completion
+    project.stages.landingPage.skipped = true;
     project.currentStage = 6;
-
-    // Calculate progress
     project.calculateProgress();
     await project.save();
 
     res.status(200).json({
       success: true,
       message: 'Landing page stage skipped successfully',
-      data: {
-        ...project.toObject(),
-        stageStatus: getStageStatus(project)
-      }
+      data: { ...project.toObject(), stageStatus: getStageStatus(project) }
     });
   } catch (error) {
     next(error);

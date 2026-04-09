@@ -3,7 +3,7 @@ const Project = require('../models/Project');
 const Task = require('../models/Task');
 const { completeStage, getStageStatus } = require('../middleware/stageGating');
 const { hasProjectAccess } = require('../utils/auth');
-const { generateTasksFromStrategy } = require('../services/taskGenerationService');
+const { generateTasksFromStrategy, updateCreativePlanTaskAssignments } = require('../services/taskGenerationService');
 
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findOne({
@@ -12,6 +12,8 @@ const checkProjectAccess = async (projectId, user) => {
   })
     .populate('assignedTeam.performanceMarketer', '_id')
     .populate('assignedTeam.contentCreator', '_id')
+    .populate('assignedTeam.contentWriters', '_id name email')
+    .populate('assignedTeam.contentWriter', '_id name email')
     .populate('assignedTeam.uiUxDesigner', '_id')
     .populate('assignedTeam.graphicDesigner', '_id')
     .populate('assignedTeam.developer', '_id')
@@ -198,6 +200,17 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       platforms: item.platforms,
       screenSizes: item.screenSizes
     })));
+
+    // Update existing task assignments if creative plan contentWriter changed
+    // This ensures tasks get reassigned when the content planner is changed
+    if (creativePlan && creativePlan.length > 0) {
+      try {
+        await updateCreativePlanTaskAssignments(projectId, creativeStrategy, project);
+      } catch (updateError) {
+        console.error('Error updating task assignments:', updateError);
+        // Don't fail the request if task assignment update fails
+      }
+    }
 
     // If completed, update project stage and generate tasks
     if (isCompleted) {

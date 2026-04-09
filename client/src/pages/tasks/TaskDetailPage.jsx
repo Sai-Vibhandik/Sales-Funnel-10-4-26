@@ -230,7 +230,10 @@ export default function TaskDetailPage() {
   };
 
   const handleGenerateAIBrief = async () => {
-    if (!selectedFramework) {
+    // Framework is required for content_writer, graphic_designer, video_editor
+    // UI/UX designers can generate brief without framework
+    const rolesRequiringFramework = ['content_writer', 'graphic_designer', 'video_editor'];
+    if (rolesRequiringFramework.includes(user?.role) && !selectedFramework) {
       toast.error('Please select a framework first');
       return;
     }
@@ -241,7 +244,7 @@ export default function TaskDetailPage() {
 
       const response = await aiService.generateBrief({
         taskId: task._id,
-        frameworkType: selectedFramework,
+        frameworkType: selectedFramework || null, // null for ui_ux_designer
         promptId: selectedPrompt?._id || null,
         approvedContent: approvedContent || null
       });
@@ -257,7 +260,10 @@ export default function TaskDetailPage() {
   };
 
   const handleRegenerateBrief = async () => {
-    if (!selectedFramework) {
+    // Framework is required for content_writer, graphic_designer, video_editor
+    // UI/UX designers can regenerate brief without framework
+    const rolesRequiringFramework = ['content_writer', 'graphic_designer', 'video_editor'];
+    if (rolesRequiringFramework.includes(user?.role) && !selectedFramework) {
       toast.error('Please select a framework first');
       return;
     }
@@ -266,7 +272,7 @@ export default function TaskDetailPage() {
       setGeneratingBrief(true);
 
       const response = await aiService.regenerateBrief(task._id, {
-        frameworkType: selectedFramework,
+        frameworkType: selectedFramework || null,
         promptId: selectedPrompt?._id || null,
         approvedContent: approvedContent || null
       });
@@ -1005,8 +1011,8 @@ export default function TaskDetailPage() {
             </CardBody>
           </Card>
 
-          {/* AI Content Brief - For Content Writers, Graphic Designers, Video Editors */}
-          {['content_writer', 'graphic_designer', 'video_editor'].includes(user?.role) && (
+          {/* AI Content Brief - For Content Writers, Graphic Designers, Video Editors, UI/UX Designers */}
+          {['content_writer', 'graphic_designer', 'video_editor', 'ui_ux_designer'].includes(user?.role) && (
             <Card>
               <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
                 <div className="flex items-center justify-between">
@@ -1053,208 +1059,253 @@ export default function TaskDetailPage() {
                 </div>
 
                 {/* Framework Selector */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Framework
-                  </label>
-                  <select
-                    value={selectedFramework}
-                    onChange={(e) => {
-                      setSelectedFramework(e.target.value);
-                      setSelectedPrompt(null); // Reset prompt when framework changes
-                    }}
-                    disabled
-                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                  >
-                    <option value="">Choose a framework...</option>
-                    {aiFrameworks.map(f => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
-                  {selectedFramework && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      {aiFrameworks.find(f => f.value === selectedFramework)?.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* Prompt Templates - Show when framework is selected */}
-                {selectedFramework && prompts.length > 0 && (
+                {/* Framework Selector - Only for content_writer (auto-selected by marketer) */}
+                {user?.role === 'content_writer' && (
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Prompt Template (Optional)
+                      Framework
                     </label>
-                    <p className="text-xs text-gray-500 mb-2">
-                      Select a specific prompt template or leave unselected to use default framework
-                    </p>
-
-                    {/* Searchable Dropdown */}
-                    <div className="relative" ref={promptDropdownRef}>
-                      <div
-                        className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 cursor-pointer flex items-center justify-between bg-white"
-                        onClick={() => setShowPromptDropdown(!showPromptDropdown)}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          {selectedPrompt ? (
-                            <>
-                              <CheckCircle className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                              <span className="text-gray-900 truncate">{selectedPrompt.title}</span>
-                              {selectedPrompt.frameworkType && (
-                                <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full flex-shrink-0">
-                                  {selectedPrompt.frameworkType}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-gray-500">Select a prompt template...</span>
-                          )}
-                        </div>
-                        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${showPromptDropdown ? 'rotate-90' : ''}`} />
-                      </div>
-
-                      {/* Dropdown Menu */}
-                      {showPromptDropdown && (
-                        <div className="absolute z-20 w-full mt-2 bg-white rounded-lg border border-gray-200 shadow-lg max-h-72 overflow-hidden">
-                          {/* Search Input */}
-                          <div className="p-2 border-b border-gray-100">
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={promptSearchTerm}
-                                onChange={(e) => setPromptSearchTerm(e.target.value)}
-                                placeholder="Search templates..."
-                                className="w-full px-3 py-2 pl-9 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                              </svg>
-                            </div>
-                          </div>
-
-                          {/* Clear Selection Option */}
-                          {selectedPrompt && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedPrompt(null);
-                                setShowPromptDropdown(false);
-                              }}
-                              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-b border-gray-100"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              Clear selection (use default framework)
-                            </button>
-                          )}
-
-                          {/* Filtered Prompts List */}
-                          <div className="overflow-y-auto max-h-52">
-                            {prompts
-                              .filter(p => {
-                                const matchesFramework = !p.frameworkType || p.frameworkType === selectedFramework;
-                                const matchesSearch = !promptSearchTerm ||
-                                  p.title.toLowerCase().includes(promptSearchTerm.toLowerCase()) ||
-                                  (p.description && p.description.toLowerCase().includes(promptSearchTerm.toLowerCase()));
-                                return matchesFramework && matchesSearch;
-                              })
-                              .length === 0 ? (
-                              <div className="px-4 py-6 text-center text-gray-500 text-sm">
-                                {promptSearchTerm ? 'No templates match your search' : 'No templates available for this framework'}
-                              </div>
-                            ) : (
-                              prompts
-                                .filter(p => {
-                                  const matchesFramework = !p.frameworkType || p.frameworkType === selectedFramework;
-                                  const matchesSearch = !promptSearchTerm ||
-                                    p.title.toLowerCase().includes(promptSearchTerm.toLowerCase()) ||
-                                    (p.description && p.description.toLowerCase().includes(promptSearchTerm.toLowerCase()));
-                                  return matchesFramework && matchesSearch;
-                                })
-                                .map((prompt) => (
-                                  <button
-                                    key={prompt._id}
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedPrompt(prompt);
-                                      setShowPromptDropdown(false);
-                                      setPromptSearchTerm('');
-                                    }}
-                                    className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 ${
-                                      selectedPrompt?._id === prompt._id ? 'bg-primary-50' : ''
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-medium text-sm text-gray-900 truncate">{prompt.title}</span>
-                                      {selectedPrompt?._id === prompt._id && (
-                                        <CheckCircle className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                                      )}
-                                    </div>
-                                    {prompt.description && (
-                                      <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{prompt.description}</div>
-                                    )}
-                                    {prompt.frameworkType && (
-                                      <div className="flex items-center gap-2 mt-1">
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">
-                                          <Sparkles className="w-3 h-3" />
-                                          {prompt.frameworkType}
-                                          {prompt.subCategory && (
-                                            <span className="text-purple-500">
-                                              → {subCategories.find(c => c.key === prompt.subCategory && c.frameworkType === prompt.frameworkType)?.displayName || prompt.subCategory}
-                                            </span>
-                                          )}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </button>
-                                ))
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Selected Template Details */}
-                    {selectedPrompt && (
-                      <div className="mt-3 p-4 bg-primary-50 rounded-lg border border-primary-200">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <CheckCircle className="w-4 h-4 text-primary-600" />
-                              <span className="font-medium text-primary-900">{selectedPrompt.title}</span>
-                            </div>
-                            {selectedPrompt.description && (
-                              <p className="text-sm text-primary-700 mb-2">{selectedPrompt.description}</p>
-                            )}
-                            {selectedPrompt.frameworkType && (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">
-                                  <Sparkles className="w-3 h-3" />
-                                  Framework: {selectedPrompt.frameworkType}
-                                </span>
-                                {selectedPrompt.subCategory && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded-full">
-                                    Category: {subCategories.find(c => c.key === selectedPrompt.subCategory && c.frameworkType === selectedPrompt.frameworkType)?.displayName || selectedPrompt.subCategory}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPrompt(null)}
-                            className="text-gray-400 hover:text-gray-600 p-1"
-                            title="Clear selection"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+                    <select
+                      value={selectedFramework}
+                      onChange={(e) => {
+                        setSelectedFramework(e.target.value);
+                        setSelectedPrompt(null);
+                      }}
+                      disabled
+                      className="w-full px-4 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed"
+                    >
+                      <option value="">No framework assigned...</option>
+                      {aiFrameworks.map(f => (
+                        <option key={f.value} value={f.value}>{f.label}</option>
+                      ))}
+                    </select>
+                    {selectedFramework && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        {aiFrameworks.find(f => f.value === selectedFramework)?.description}
+                      </p>
+                    )}
+                    {!selectedFramework && (
+                      <p className="text-xs text-amber-600 mt-2">
+                        Framework will be assigned by the Performance Marketer
+                      </p>
                     )}
                   </div>
                 )}
 
+                {/* Framework Selector - For graphic_designer, video_editor (selectable) */}
+                {/* UI/UX Designers do NOT need framework - they use prompt templates only */}
+                {['graphic_designer', 'video_editor'].includes(user?.role) && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Framework <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={selectedFramework}
+                      onChange={(e) => {
+                        setSelectedFramework(e.target.value);
+                        setSelectedPrompt(null);
+                      }}
+                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                    >
+                      <option value="">Select a framework...</option>
+                      {aiFrameworks.map(f => (
+                        <option key={f.value} value={f.value}>{f.label}</option>
+                      ))}
+                    </select>
+                    {selectedFramework && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        {aiFrameworks.find(f => f.value === selectedFramework)?.description}
+                      </p>
+                    )}
+                    {!selectedFramework && (
+                      <p className="text-xs text-amber-600 mt-2">
+                        Please select a framework to generate your brief
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Prompt Templates */}
+                {/* For content_writer: show only when framework is selected */}
+                {/* For other roles (graphic_designer, video_editor, ui_ux_designer): always show */}
+                {(user?.role !== 'content_writer' || selectedFramework) && prompts.length > 0 && (
+  <div className="mb-6">
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Prompt Template {user?.role === 'content_writer' ? '(Optional)' : ''}
+    </label>
+    <p className="text-xs text-gray-500 mb-2">
+      {user?.role === 'content_writer'
+        ? 'Select a specific prompt template or leave unselected to use default framework'
+        : 'Select a prompt template to guide the AI brief generation'}
+    </p>
+
+    {/* Searchable Dropdown */}
+    <div className="relative" ref={promptDropdownRef}>
+      <div
+        className="w-full px-4 py-2.5 rounded-lg border border-gray-200 cursor-pointer flex items-center justify-between bg-white"
+        onClick={() => setShowPromptDropdown(!showPromptDropdown)}
+      >
+        <div className="flex items-center gap-2 truncate">
+          {selectedPrompt ? (
+            <>
+              <CheckCircle className="w-4 h-4 text-primary-500 flex-shrink-0" />
+              <span className="text-gray-900 truncate">{selectedPrompt.title}</span>
+              {selectedPrompt.frameworkType && (
+                <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full flex-shrink-0">
+                  {selectedPrompt.frameworkType}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-gray-500">Select a prompt template...</span>
+          )}
+        </div>
+        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${showPromptDropdown ? 'rotate-90' : ''}`} />
+      </div>
+
+      {showPromptDropdown && (
+        <div className="absolute z-20 w-full mt-2 bg-white rounded-lg border border-gray-200 shadow-lg max-h-72 overflow-hidden">
+          {/* Search Input */}
+          <div className="p-2 border-b border-gray-100">
+            <div className="relative">
+              <input
+                type="text"
+                value={promptSearchTerm}
+                onChange={(e) => setPromptSearchTerm(e.target.value)}
+                placeholder="Search templates..."
+                className="w-full px-3 py-2 pl-9 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Clear Selection Option */}
+          {selectedPrompt && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedPrompt(null);
+                setShowPromptDropdown(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-b border-gray-100"
+            >
+              <XCircle className="w-4 h-4" />
+              Clear selection
+            </button>
+          )}
+
+          {/* Prompts List */}
+          <div className="overflow-y-auto max-h-52">
+            {(() => {
+              const filtered = prompts.filter(p => {
+                // content_writer: filter by framework; others: show all
+                const matchesFramework = user?.role === 'content_writer'
+                  ? (!p.frameworkType || p.frameworkType === selectedFramework)
+                  : true;
+                const matchesSearch = !promptSearchTerm ||
+                  p.title.toLowerCase().includes(promptSearchTerm.toLowerCase()) ||
+                  (p.description && p.description.toLowerCase().includes(promptSearchTerm.toLowerCase()));
+                return matchesFramework && matchesSearch;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                    {promptSearchTerm ? 'No templates match your search' : 'No templates available'}
+                  </div>
+                );
+              }
+
+              return filtered.map((prompt) => (
+                <button
+                  key={prompt._id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedPrompt(prompt);
+                    // For non-content_writers, auto-set the framework from the prompt
+                    if (user?.role !== 'content_writer' && prompt.frameworkType) {
+                      setSelectedFramework(prompt.frameworkType);
+                    }
+                    setShowPromptDropdown(false);
+                    setPromptSearchTerm('');
+                  }}
+                  className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 ${
+                    selectedPrompt?._id === prompt._id ? 'bg-primary-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-sm text-gray-900 truncate">{prompt.title}</span>
+                    {selectedPrompt?._id === prompt._id && (
+                      <CheckCircle className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                    )}
+                  </div>
+                  {prompt.description && (
+                    <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{prompt.description}</div>
+                  )}
+                  {prompt.frameworkType && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">
+                        <Sparkles className="w-3 h-3" />
+                        {prompt.frameworkType}
+                        {prompt.subCategory && (
+                          <span className="text-purple-500">
+                            → {subCategories.find(c => c.key === prompt.subCategory && c.frameworkType === prompt.frameworkType)?.displayName || prompt.subCategory}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* Selected Template Details */}
+    {selectedPrompt && (
+      <div className="mt-3 p-4 bg-primary-50 rounded-lg border border-primary-200">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-4 h-4 text-primary-600" />
+              <span className="font-medium text-primary-900">{selectedPrompt.title}</span>
+            </div>
+            {selectedPrompt.description && (
+              <p className="text-sm text-primary-700 mb-2">{selectedPrompt.description}</p>
+            )}
+            {selectedPrompt.frameworkType && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">
+                  <Sparkles className="w-3 h-3" />
+                  Framework: {selectedPrompt.frameworkType}
+                </span>
+                {selectedPrompt.subCategory && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded-full">
+                    Category: {subCategories.find(c => c.key === selectedPrompt.subCategory && c.frameworkType === selectedPrompt.frameworkType)?.displayName || selectedPrompt.subCategory}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedPrompt(null)}
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+)}
                 {/* Approved Content - Only for Graphic Designers and Video Editors */}
                 {['graphic_designer', 'video_editor'].includes(user?.role) && (
                   <div className="mb-6">
@@ -1293,7 +1344,7 @@ Script: (for video) Opening hook..."
                       className="w-full"
                       onClick={handleGenerateAIBrief}
                       loading={generatingBrief}
-                      disabled={!selectedFramework || generatingBrief}
+                      disabled={(['content_writer', 'graphic_designer', 'video_editor'].includes(user?.role) && !selectedFramework) || generatingBrief}
                     >
                       <Sparkles className="w-4 h-4 mr-2" />
                       Generate Brief
@@ -1304,10 +1355,10 @@ Script: (for video) Opening hook..."
                       className="w-full"
                       onClick={handleRegenerateBrief}
                       loading={generatingBrief}
-                      disabled={!selectedFramework || generatingBrief}
+                      disabled={(['content_writer', 'graphic_designer', 'video_editor'].includes(user?.role) && !selectedFramework) || generatingBrief}
                     >
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Regenerate with {selectedPrompt ? 'Selected Template' : 'Framework'}
+                      {selectedPrompt ? 'Regenerate with Selected Template' : 'Regenerate Brief'}
                     </Button>
                   )}
                 </div>

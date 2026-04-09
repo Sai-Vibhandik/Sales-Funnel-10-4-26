@@ -772,6 +772,64 @@ exports.testerReview = async (req, res, next) => {
         projectId: task.projectId?._id || task.projectId,
         organizationId: req.organizationId
       });
+
+      // Send email notification for:
+      // 1. Rejections (task reassigned back to someone)
+      // 2. Marketer final approval assignments (design_approved, development_approved)
+      const isMarketerAssignment = approved && (newStatus === 'design_approved' || newStatus === 'development_approved');
+
+      if (!approved) {
+        // Rejection email
+        const assignedUser = await User.findById(task.assignedTo._id || task.assignedTo).select('name email');
+        if (assignedUser) {
+          const rejectionContext = {
+            isRejection: true,
+            rejectionReason: task.rejectionReason,
+            rejectionNote: task.rejectionNote,
+            rejectedBy: req.user
+          };
+          emailService.sendTaskAssignmentNotification(
+            task,
+            task.projectId,
+            assignedUser,
+            { name: 'System' },
+            rejectionContext
+          ).catch(err => console.error('Failed to send task notification email:', err));
+        }
+      } else if (isMarketerAssignment) {
+        // Marketer final approval assignment email
+        // Get the marketer - either from marketerId or from project team
+        let marketerId = task.marketerId;
+
+        // If marketerId is not set, get marketer from project team
+        if (!marketerId) {
+          const project = await Project.findOne({
+            _id: task.projectId._id || task.projectId,
+            organizationId: req.organizationId
+          }).populate('assignedTeam.performanceMarketers', '_id name email')
+            .populate('assignedTeam.performanceMarketer', '_id name email');
+
+          const marketer = project?.assignedTeam?.performanceMarketers?.[0] ||
+                          project?.assignedTeam?.performanceMarketer;
+          if (marketer) {
+            marketerId = marketer._id || marketer;
+            task.assignedTo = marketerId;
+            await task.save();
+          }
+        }
+
+        if (marketerId) {
+          const assignedUser = await User.findById(marketerId).select('name email');
+          if (assignedUser) {
+            emailService.sendTaskAssignmentNotification(
+              task,
+              task.projectId,
+              assignedUser,
+              { name: 'System' }
+            ).catch(err => console.error('Failed to send marketer notification email:', err));
+          }
+        }
+      }
     }
 
     // If content is finalized, find the paired design task and copy the approved content
@@ -968,6 +1026,14 @@ exports.testerReview = async (req, res, next) => {
             designTask.status = 'design_pending';
           }
 
+          // Update description to reflect that content is now approved
+          const creativeName = designTask.creativeName || task.creativeName || 'creative assets';
+          if (isVideoTask) {
+            designTask.description = `Create video content for ${creativeName} based on the approved content and creative brief.`;
+          } else {
+            designTask.description = `Design ${creativeName} based on the approved content and creative brief.`;
+          }
+
           await designTask.save();
           console.log('✓ Successfully saved design task with copied content and assignment');
 
@@ -989,6 +1055,17 @@ exports.testerReview = async (req, res, next) => {
               organizationId: req.organizationId
             });
             console.log('✓ Notification sent to assigned designer/editor');
+
+            // Send email notification to graphic designer/video editor
+            const assignedDesigner = await User.findById(designTask.assignedTo._id || designTask.assignedTo).select('name email');
+            if (assignedDesigner) {
+              emailService.sendTaskAssignmentNotification(
+                designTask,
+                task.projectId,
+                assignedDesigner,
+                { name: 'System' }
+              ).catch(err => console.error('Failed to send designer/editor notification email:', err));
+            }
           }
         } else {
           console.log('\n⚠ WARNING: No paired design task found for content task');
@@ -1018,52 +1095,9 @@ exports.testerReview = async (req, res, next) => {
       }
     }
 
-    // If landing page design is approved, notify developer
-    if (approved && (task.taskType === 'landing_page_design' || task.status === 'design_approved')) {
-      if (!task.projectId) {
-        console.warn('Task missing projectId during landing page design approval');
-      } else {
-        const project = await Project.findOne({
-          _id: task.projectId._id || task.projectId,
-          organizationId: req.organizationId
-        })
-          .populate('assignedTeam.developers', '_id name')
-          .populate('assignedTeam.developer', '_id name');
-
-        let developmentTask = await Task.findOne({
-          projectId: task.projectId._id || task.projectId,
-          taskType: 'landing_page_development',
-          landingPageId: task.landingPageId
-        });
-
-        if (developmentTask) {
-          developmentTask.designLink = task.designLink;
-          developmentTask.designFile = task.designFile;
-          developmentTask.designNotes = task.designNotes;
-          await developmentTask.save();
-        }
-
-        // Get developer from project or task
-        let developerId = developmentTask?.assignedTo;
-
-        if (!developerId && project?.assignedTeam?.developers?.length > 0) {
-          developerId = project.assignedTeam.developers[0]._id;
-        } else if (!developerId && project?.assignedTeam?.developer) {
-          developerId = project.assignedTeam.developer._id;
-        }
-
-        if (developerId) {
-          await Notification.create({
-            recipient: developerId,
-            type: 'task_assigned',
-            title: 'Landing Page Ready for Development',
-            message: `The landing page design for "${project?.projectName || project?.businessName || 'a project'}" is approved and ready for development.`,
-            projectId: task.projectId._id || task.projectId,
-            organizationId: req.organizationId
-          });
-        }
-      }
-    }
+    // Note: Developer is NOT notified at Tester approval.
+    // Developer will be notified when Performance Marketer does final approval.
+    // This happens in marketerReview function for landing_page_design tasks.
 
     res.status(200).json({
       success: true,
@@ -1260,6 +1294,26 @@ exports.marketerReview = async (req, res, next) => {
         projectId: task.projectId?._id || task.projectId,
         organizationId: req.organizationId
       });
+
+      // Send email notification for rejections
+      if (!approved) {
+        const assignedUser = await User.findById(task.assignedTo._id || task.assignedTo).select('name email');
+        if (assignedUser) {
+          const rejectionContext = {
+            isRejection: true,
+            rejectionReason: task.rejectionReason,
+            rejectionNote: task.rejectionNote,
+            rejectedBy: req.user
+          };
+          emailService.sendTaskAssignmentNotification(
+            task,
+            task.projectId,
+            assignedUser,
+            { name: 'System' },
+            rejectionContext
+          ).catch(err => console.error('Failed to send rejection notification email:', err));
+        }
+      }
     }
 
     // If content is approved, find paired design task and notify the correct designer/editor
@@ -1327,6 +1381,17 @@ exports.marketerReview = async (req, res, next) => {
             projectId: task.projectId._id || task.projectId,
             organizationId: req.organizationId
           });
+
+          // Send email notification (async, don't block)
+          const designerUser = await User.findById(targetTeamMember._id || targetTeamMember).select('name email');
+          if (designerUser) {
+            emailService.sendTaskAssignmentNotification(
+              designTask,
+              task.projectId,
+              designerUser,
+              { name: 'System' }
+            ).catch(err => console.error('Failed to send design task assignment email:', err));
+          }
         } else if (targetTeamMember) {
           // No matching design task found, but still notify the designer
           await Notification.create({
@@ -1337,6 +1402,17 @@ exports.marketerReview = async (req, res, next) => {
             projectId: task.projectId._id || task.projectId,
             organizationId: req.organizationId
           });
+
+          // Send email notification (async, don't block)
+          const designerUser = await User.findById(targetTeamMember._id || targetTeamMember).select('name email');
+          if (designerUser) {
+            emailService.sendTaskAssignmentNotification(
+              { taskTitle: `${isVideoTask ? 'Video Editing' : 'Design'} Task`, taskType: isVideoTask ? 'video_editing' : 'graphic_design' },
+              task.projectId,
+              designerUser,
+              { name: 'System' }
+            ).catch(err => console.error('Failed to send design task assignment email:', err));
+          }
         }
       }
     }
@@ -1366,6 +1442,9 @@ exports.marketerReview = async (req, res, next) => {
           developmentTask.designFile = task.designFile;
           developmentTask.designNotes = task.designNotes;
 
+          // Update description to reflect that design is now approved
+          developmentTask.description = `Develop the landing page for ${task.projectId?.projectName || task.projectId?.businessName || 'the project'} based on the approved design.`;
+
           // Get developer - first check developerId (stored during task creation), then project team
           let developerId = developmentTask.developerId;
 
@@ -1392,6 +1471,17 @@ exports.marketerReview = async (req, res, next) => {
               projectId: task.projectId._id || task.projectId,
               organizationId: req.organizationId
             });
+
+            // Send email notification (async, don't block)
+            const developerUser = await User.findById(developerId).select('name email');
+            if (developerUser) {
+              emailService.sendTaskAssignmentNotification(
+                developmentTask,
+                task.projectId,
+                developerUser,
+                { name: 'System' }
+              ).catch(err => console.error('Failed to send developer task assignment email:', err));
+            }
           }
         }
       }
@@ -1456,6 +1546,17 @@ exports.assignTask = async (req, res, next) => {
         projectId: task.projectId._id,
         organizationId: req.organizationId
       });
+
+      // Send email notification (async, don't block)
+      const assignedUser = await User.findById(assignedTo).select('name email');
+      if (assignedUser) {
+        emailService.sendTaskAssignmentNotification(
+          task,
+          task.projectId,
+          assignedUser,
+          req.user
+        ).catch(err => console.error('Failed to send task assignment email:', err));
+      }
     }
 
     res.status(200).json({
@@ -2505,20 +2606,22 @@ async function notifyTesterForReview(task, organizationId) {
   }
   const project = await Project.findOne(query)
     // New array fields
-    .populate('assignedTeam.testers', '_id name')
+    .populate('assignedTeam.testers', '_id name email')
     // Legacy single field
-    .populate('assignedTeam.tester', '_id name');
+    .populate('assignedTeam.tester', '_id name email');
 
   if (!project) return;
 
   // Collect all testers (from both new array and legacy field)
   const testerIds = [];
+  const testers = [];
 
   // From new array field
   if (project.assignedTeam?.testers && Array.isArray(project.assignedTeam.testers)) {
     project.assignedTeam.testers.forEach(tester => {
       if (tester && tester._id) {
         testerIds.push(tester._id);
+        testers.push(tester);
       }
     });
   }
@@ -2528,12 +2631,17 @@ async function notifyTesterForReview(task, organizationId) {
     // Only add if not already in the list
     if (!testerIds.some(id => id.toString() === project.assignedTeam.tester._id.toString())) {
       testerIds.push(project.assignedTeam.tester._id);
+      testers.push(project.assignedTeam.tester);
     }
   }
 
   // Also notify the specific tester assigned to the task (if set)
   if (task.testerId && !testerIds.some(id => id.toString() === task.testerId.toString())) {
-    testerIds.push(task.testerId);
+    const specificTester = await User.findById(task.testerId).select('_id name email');
+    if (specificTester) {
+      testerIds.push(specificTester._id);
+      testers.push(specificTester);
+    }
   }
 
   // Notify all testers
@@ -2546,6 +2654,18 @@ async function notifyTesterForReview(task, organizationId) {
       projectId: task.projectId,
       organizationId: orgId || project.organizationId
     });
+  }
+
+  // Send email notifications to testers (async, don't block)
+  for (const tester of testers) {
+    if (tester && tester.email) {
+      emailService.sendTaskAssignmentNotification(
+        task,
+        project,
+        tester,
+        { name: 'System' }
+      ).catch(err => console.error('Failed to send tester notification email:', err));
+    }
   }
 }
 

@@ -498,6 +498,7 @@ export default function ProjectDetailPage() {
           landingPages={project?.landingPages || []}
           onSave={handleLandingPagesSave}
           loading={loading}
+          assignedTeam={project?.assignedTeam}
         />
       )}
 

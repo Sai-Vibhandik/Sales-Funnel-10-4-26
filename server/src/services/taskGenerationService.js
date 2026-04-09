@@ -176,23 +176,46 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
 
     // Generate tasks from new creative plan
     if (creativePlan.length > 0) {
-      // Check which creative plan items already have tasks
+      // Check which creative plan items already have tasks by task title
+      // Each creative plan item creates tasks with specific titles
       const existingCreativePlanTasks = await Task.find({
         projectId,
         creativeStrategyId: creativeStrategy?._id,
         taskType: { $in: ['content_creation', 'graphic_design', 'video_editing'] }
-      }).select('taskType creativeStrategyId');
+      }).select('taskTitle taskType');
 
-      const existingPlanTaskKeys = new Set(
-        existingCreativePlanTasks.map(t => `${t.taskType}_${t.creativeStrategyId}`)
+      // Build a set of existing task titles to identify which creative plan items have tasks
+      // Content tasks are titled "Content: {creativeName}" and design tasks are "{creativeName}"
+      const existingTaskTitles = new Set(
+        existingCreativePlanTasks.map(t => t.taskTitle)
       );
 
-      // Only generate tasks if no tasks exist for this creative strategy
-      if (existingPlanTaskKeys.size === 0) {
-        const creativePlanTasks = await generateCreativePlanTasks(creativePlan, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+      // Filter creative plan items that don't have tasks yet
+      const newCreativePlanItems = creativePlan.filter(item => {
+        const itemTitle = item.name || item.subType || item.adType || `Creative ${creativePlan.indexOf(item) + 1}`;
+        const contentTaskTitle = `Content: ${itemTitle}`;
+        const designTaskTitle = itemTitle;
+
+        // Check if both content and design tasks exist for this item
+        const hasContentTask = existingTaskTitles.has(contentTaskTitle);
+        const hasDesignTask = existingTaskTitles.has(designTaskTitle);
+
+        // If either task is missing, include this item for task generation
+        const needsTasks = !hasContentTask || !hasDesignTask;
+
+        if (!needsTasks) {
+          console.log(`Skipping creative plan item "${itemTitle}" - tasks already exist`);
+        }
+
+        return needsTasks;
+      });
+
+      if (newCreativePlanItems.length > 0) {
+        console.log(`Generating tasks for ${newCreativePlanItems.length} new creative plan items (out of ${creativePlan.length} total)`);
+        const creativePlanTasks = await generateCreativePlanTasks(newCreativePlanItems, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
         tasks.push(...creativePlanTasks);
       } else {
-        console.log(`Skipping creative plan tasks - ${existingPlanTaskKeys.size} tasks already exist for creative strategy`);
+        console.log(`All ${creativePlan.length} creative plan items already have tasks - skipping task generation`);
       }
     }
 
@@ -1524,6 +1547,150 @@ async function linkContentToDesignTasks(savedTasks, projectId) {
   }
 }
 
+/**
+ * Update existing task assignments when creative plan contentWriter changes
+ * This ensures tasks get reassigned when the content planner is changed in the creative strategy
+ */
+async function updateCreativePlanTaskAssignments(projectId, creativeStrategy, project) {
+  try {
+    console.log('\n========================================');
+    console.log('=== UPDATING CREATIVE PLAN TASK ASSIGNMENTS ===');
+    console.log('========================================');
+
+    const creativePlan = creativeStrategy.creativePlan || [];
+    if (creativePlan.length === 0) {
+      console.log('No creative plan items to update');
+      return;
+    }
+
+    // Get project-level content writers for fallback
+    const defaultContentWriters = project.assignedTeam?.contentWriters ||
+      (project.assignedTeam?.contentWriter ? [project.assignedTeam.contentWriter] : []);
+
+    console.log('=== DEFAULT CONTENT WRITERS (FALLBACK) ===');
+    console.log('contentWriters from project:', project.assignedTeam?.contentWriters?.map(w => ({ _id: w?._id, name: w?.name })) || 'none');
+    console.log('contentWriter (legacy) from project:', project.assignedTeam?.contentWriter?._id || project.assignedTeam?.contentWriter || 'none');
+    console.log('defaultContentWriters array:', defaultContentWriters.map(w => ({ _id: w?._id, name: w?.name })) || 'empty');
+
+    // Find all content tasks for this project's creative strategy
+    const existingContentTasks = await Task.find({
+      projectId,
+      creativeStrategyId: creativeStrategy._id,
+      taskType: 'content_creation'
+    });
+
+    console.log(`Found ${existingContentTasks.length} existing content tasks`);
+
+    if (existingContentTasks.length === 0) {
+      console.log('No existing content tasks to update');
+      return;
+    }
+
+    // Build a map of creative plan items by name for quick lookup
+    const planItemMap = new Map();
+    for (const item of creativePlan) {
+      const key = item.name || item.subType || item.adType || `Creative ${creativePlan.indexOf(item) + 1}`;
+      planItemMap.set(key, item);
+      console.log(`Plan item: "${key}" -> contentWriter: ${item.contentWriter?._id || item.contentWriter || 'none'}`);
+    }
+
+    let updatedCount = 0;
+
+    for (const task of existingContentTasks) {
+      // Extract the creative name from task title (format: "Content: {creativeName}")
+      const creativeName = task.taskTitle.replace('Content: ', '').trim();
+      const planItem = planItemMap.get(creativeName);
+
+      if (!planItem) {
+        // Try fuzzy matching - find the closest match
+        const matchingKey = [...planItemMap.keys()].find(key =>
+          key.toLowerCase().includes(creativeName.toLowerCase()) ||
+          creativeName.toLowerCase().includes(key.toLowerCase())
+        );
+
+        if (matchingKey) {
+          console.log(`Task "${task.taskTitle}" matched to plan item "${matchingKey}" via fuzzy match`);
+          const planItem = planItemMap.get(matchingKey);
+
+          // Determine the content writer to assign
+          let newContentWriterId = null;
+
+          if (planItem.contentWriter) {
+            // Use the specific content planner from the plan item
+            // Handle both ObjectId and populated user object
+            newContentWriterId = typeof planItem.contentWriter === 'object'
+              ? planItem.contentWriter._id?.toString() || planItem.contentWriter.toString()
+              : planItem.contentWriter.toString();
+          } else if (defaultContentWriters.length > 0) {
+            // Fall back to project-level content writers
+            newContentWriterId = defaultContentWriters[0]._id?.toString() || defaultContentWriters[0].toString();
+          }
+
+          if (!newContentWriterId) {
+            console.log(`No content writer available for task "${task.taskTitle}"`);
+            continue;
+          }
+
+          // Convert to string for comparison
+          const currentAssigneeStr = task.assignedTo?.toString();
+
+          // Check if assignment needs to be updated
+          if (currentAssigneeStr !== newContentWriterId) {
+            console.log(`Updating task "${task.taskTitle}" assignment from ${currentAssigneeStr || 'unassigned'} to ${newContentWriterId}`);
+            task.assignedTo = newContentWriterId;
+            await task.save();
+            updatedCount++;
+          } else {
+            console.log(`Task "${task.taskTitle}" already assigned correctly`);
+          }
+        } else {
+          console.log(`No matching plan item for task "${task.taskTitle}" (creativeName: "${creativeName}")`);
+        }
+        continue;
+      }
+
+      // Determine the content writer to assign
+      let newContentWriterId = null;
+
+      if (planItem.contentWriter) {
+        // Use the specific content planner from the plan item
+        // Handle both ObjectId and populated user object
+        newContentWriterId = typeof planItem.contentWriter === 'object'
+          ? planItem.contentWriter._id?.toString() || planItem.contentWriter.toString()
+          : planItem.contentWriter.toString();
+      } else if (defaultContentWriters.length > 0) {
+        // Fall back to project-level content writers
+        newContentWriterId = defaultContentWriters[0]._id?.toString() || defaultContentWriters[0].toString();
+      }
+
+      if (!newContentWriterId) {
+        console.log(`No content writer available for task "${task.taskTitle}"`);
+        continue;
+      }
+
+      // Convert to string for comparison
+      const currentAssigneeStr = task.assignedTo?.toString();
+
+      // Check if assignment needs to be updated
+      if (currentAssigneeStr !== newContentWriterId) {
+        console.log(`Updating task "${task.taskTitle}" assignment from ${currentAssigneeStr || 'unassigned'} to ${newContentWriterId}`);
+        task.assignedTo = newContentWriterId;
+        await task.save();
+        updatedCount++;
+      } else {
+        console.log(`Task "${task.taskTitle}" already assigned correctly`);
+      }
+    }
+
+    console.log(`\n=== TASK ASSIGNMENT UPDATE COMPLETE ===`);
+    console.log(`Updated ${updatedCount} task assignments`);
+    console.log('========================================\n');
+  } catch (error) {
+    console.error('Error updating creative plan task assignments:', error);
+    // Don't throw - this is not critical, tasks can still work
+  }
+}
+
 module.exports = {
   generateTasksFromStrategy,
   getTasksByProject,
@@ -1531,5 +1698,6 @@ module.exports = {
   updateTaskStatus,
   buildStrategyContext,
   generateAIPrompt,
-  SOP_REFERENCES
+  SOP_REFERENCES,
+  updateCreativePlanTaskAssignments
 };

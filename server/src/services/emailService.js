@@ -3,7 +3,8 @@ const {
   orgRegistrationTemplate,
   teamInvitationTemplate,
   taskAssignmentTemplate,
-  projectAssignmentTemplate
+  projectAssignmentTemplate,
+  teamMemberCreatedTemplate
 } = require('../utils/emailTemplates');
 
 /**
@@ -12,13 +13,13 @@ const {
  */
 
 /**
- * Send notification to platform admins about new organization registration
+ * Send notification to organization owner and platform admins about new registration
  * @param {Object} organization - The created organization
  * @param {Object} owner - The organization owner (user)
  * @param {Object} plan - The selected plan
  */
-const sendOrgRegistrationNotification = async (organization, owner, plan) => {
-  console.log('=== sendOrgRegistrationNotification called ===');
+const sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 = async (organization, owner, plan) => {
+  console.log('=== sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 called ===');
   console.log('Organization:', organization?.name);
   console.log('Owner:', owner?.name, owner?.email);
 
@@ -28,36 +29,44 @@ const sendOrgRegistrationNotification = async (organization, owner, plan) => {
     const platformAdmins = await User.find({ role: 'platform_admin', isActive: true });
 
     console.log('Platform admins found:', platformAdmins?.length || 0);
-
-    // Also send to the organization owner for testing/notification
-    const recipients = [...(platformAdmins || [])];
-
-    // Add owner to recipients for welcome email
-    if (owner && owner.email) {
-      console.log('Also sending welcome email to owner:', owner.email);
-      recipients.push({ email: owner.email, name: owner.name, _id: owner._id });
+    if (platformAdmins?.length > 0) {
+      console.log('Platform admin emails:', platformAdmins.map(a => a.email));
     }
-
-    if (recipients.length === 0) {
-      console.log('No recipients found to notify - skipping email');
-      return;
-    }
-
-    console.log('Sending emails to:', recipients.map(r => r.email));
 
     const { subject, html } = orgRegistrationTemplate(organization, owner, plan);
 
-    // Send to all recipients
-    const emailPromises = recipients.map(recipient =>
-      sendEmail({
-        email: recipient.email,
-        subject,
+    // Send to organization owner (confirmation email)
+    if (owner && owner.email) {
+      console.log('Sending confirmation email to owner:', owner.email);
+      await sendEmail({
+        email: owner.email,
+        subject: `Welcome to ${organization.name || 'Growth Valley'}!`,
         html
-      })
-    );
+      });
+      console.log(`Confirmation email sent to owner: ${owner.email}`);
+    }
 
-    await Promise.all(emailPromises);
-    console.log(`Organization registration notification sent to ${recipients.length} recipient(s)`);
+    // Send to platform admins (notification about new registration)
+    if (platformAdmins && platformAdmins.length > 0) {
+      for (const admin of platformAdmins) {
+        if (admin.email) {
+          try {
+            console.log('Sending notification to platform admin:', admin.email);
+            await sendEmail({
+              email: admin.email,
+              subject: `[Admin] New Organization: ${organization.name}`,
+              html
+            });
+            console.log(`Notification sent to platform admin: ${admin.email}`);
+          } catch (adminError) {
+            // Don't fail if one admin email fails
+            console.error(`Failed to send to platform admin ${admin.email}:`, adminError.message);
+          }
+        }
+      }
+    }
+
+    console.log('=== sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 completed ===');
   } catch (error) {
     console.error('Error sending org registration notification:', error);
     console.error('Error stack:', error.stack);
@@ -72,8 +81,15 @@ const sendOrgRegistrationNotification = async (organization, owner, plan) => {
  * @param {Object} inviter - The user who sent the invitation
  */
 const sendTeamInvitation = async (invitation, organization, inviter) => {
+  console.log('=== sendTeamInvitation called ===');
+  console.log('Invitation:', invitation?.email, invitation?._id);
+  console.log('Organization:', organization?.name);
+  console.log('Inviter:', inviter?.name, inviter?.email);
+
   try {
     const { subject, html } = teamInvitationTemplate(invitation, organization, inviter);
+
+    console.log('Template generated, sending email to:', invitation.email);
 
     await sendEmail({
       email: invitation.email,
@@ -84,6 +100,7 @@ const sendTeamInvitation = async (invitation, organization, inviter) => {
     console.log(`Team invitation email sent to ${invitation.email}`);
   } catch (error) {
     console.error('Error sending team invitation email:', error);
+    console.error('Error stack:', error.stack);
     // Don't throw - email failures should not block the main operation
   }
 };
@@ -94,10 +111,11 @@ const sendTeamInvitation = async (invitation, organization, inviter) => {
  * @param {Object} project - The project the task belongs to
  * @param {Object} assignedUser - The user assigned to the task
  * @param {Object} assignedBy - The user who assigned the task
+ * @param {Object} rejectionContext - Optional context for rejection emails
  */
-const sendTaskAssignmentNotification = async (task, project, assignedUser, assignedBy) => {
+const sendTaskAssignmentNotification = async (task, project, assignedUser, assignedBy, rejectionContext = null) => {
   try {
-    const { subject, html } = taskAssignmentTemplate(task, project, assignedUser, assignedBy);
+    const { subject, html } = taskAssignmentTemplate(task, project, assignedUser, assignedBy, rejectionContext);
 
     await sendEmail({
       email: assignedUser.email,
@@ -136,9 +154,40 @@ const sendProjectAssignmentNotification = async (project, assignedUser, role, as
   }
 };
 
+/**
+ * Send team member created notification email
+ * @param {Object} user - The newly created user
+ * @param {Object} organization - The organization
+ * @param {Object} createdBy - The admin who created the user
+ * @param {string} temporaryPassword - The temporary password (optional)
+ */
+const sendTeamMemberCreatedNotification = async (user, organization, createdBy, temporaryPassword = null) => {
+  console.log('=== sendTeamMemberCreatedNotification called ===');
+  console.log('User:', user?.name, user?.email);
+  console.log('Organization:', organization?.name);
+  console.log('Created by:', createdBy?.name);
+
+  try {
+    const { subject, html } = teamMemberCreatedTemplate(user, organization, createdBy, temporaryPassword);
+
+    await sendEmail({
+      email: user.email,
+      subject,
+      html
+    });
+
+    console.log(`Team member created notification sent to ${user.email}`);
+  } catch (error) {
+    console.error('Error sending team member created notification:', error);
+    console.error('Error stack:', error.stack);
+    // Don't throw - email failures should not block the main operation
+  }
+};
+
 module.exports = {
-  sendOrgRegistrationNotification,
+  sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8,
   sendTeamInvitation,
   sendTaskAssignmentNotification,
-  sendProjectAssignmentNotification
+  sendProjectAssignmentNotification,
+  sendTeamMemberCreatedNotification
 };

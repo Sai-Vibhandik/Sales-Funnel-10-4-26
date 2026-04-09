@@ -13,7 +13,11 @@
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
       "Bash(powershell:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(timeout 10 bash -c 'cat \"C:\\\\Users\\\\SONU\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\A--DashboardSalesFunnel-DashboardSalesFunnel-Sales-Funnel-MultiTenant---1-4-26\\\\cad78bdb-f7a2-4b2f-8fd5-1c32675cf603\\\\tasks\\\\bfbc9o3o3.output\"')",
+      "Bash(findstr :5000)",
+      "Bash(findstr \":5000\")",
+      "Bash(findstr LISTENING)"
     ]
   }
 }

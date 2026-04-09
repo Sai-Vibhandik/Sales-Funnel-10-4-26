@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Card, CardBody, CardHeader, Button, Textarea, Badge } from '@/components/ui';
 import {
@@ -63,8 +63,11 @@ const FLAT_SCREEN_SIZES = [
   { key: 'thumbnail', label: 'Thumbnail', dimensions: '1280x720' }
 ];
 
-// Generate unique ID for creative rows
+// Generate unique ID for NEW creative rows (prefix makes them distinguishable from DB IDs)
 const generateId = () => `creative_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// Check if an _id is a locally-generated temporary ID (not yet persisted to DB)
+const isTemporaryId = (id) => typeof id === 'string' && id.startsWith('creative_');
 
 // Default creative row
 const createEmptyCreative = () => ({
@@ -76,10 +79,10 @@ const createEmptyCreative = () => ({
   screenSizes: [],
   assignedRole: '',
   assignedTeamMembers: [],
-  contentWriter: '', // Content Planner assigned to this creative
-  adIntent: '', // Ad intent (e.g., "UGC ads, testimonial ads")
-  aiFramework: '', // AI Framework for content planner
-  aiSubCategory: '', // Subcategory for the framework
+  contentWriter: '',
+  adIntent: '',
+  aiFramework: '',
+  aiSubCategory: '',
   notes: ''
 });
 
@@ -124,8 +127,11 @@ export default function CreativePlanner({
   const [creativePlan, setCreativePlan] = useState([]);
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [expandedCards, setExpandedCards] = useState({});
-  const [subCategories, setSubCategories] = useState([]); // Subcategories for selected framework
-  const [allSubCategories, setAllSubCategories] = useState([]); // All subcategories
+  const [allSubCategories, setAllSubCategories] = useState([]);
+
+  // ─── FIX: Track the "last saved snapshot" so we can diff on save
+  // and know which assignments are NEW (need task creation) vs unchanged.
+  const lastSavedPlanRef = useRef([]);
 
   // Fetch all subcategories on mount
   useEffect(() => {
@@ -140,20 +146,11 @@ export default function CreativePlanner({
     fetchAllSubCategories();
   }, []);
 
-  // Extract project assigned team from project prop - this is the ONLY source of team members
+  // Extract project assigned team from project prop
   useEffect(() => {
-    console.log('=== CreativePlanner: Extracting project-assigned team ===');
-    console.log('Project prop:', project);
-
     if (project?.assignedTeam) {
-      console.log('assignedTeam found with keys:', Object.keys(project.assignedTeam));
-      console.log('contentWriters:', project.assignedTeam.contentWriters);
-      console.log('graphicDesigners:', project.assignedTeam.graphicDesigners);
-      console.log('videoEditors:', project.assignedTeam.videoEditors);
-
       setProjectAssignedTeam(project.assignedTeam);
     } else {
-      console.log('No assignedTeam in project');
       setProjectAssignedTeam({});
     }
   }, [project]);
@@ -163,6 +160,8 @@ export default function CreativePlanner({
     if (initialData) {
       if (initialData.creativePlan && initialData.creativePlan.length > 0) {
         const migratedPlan = initialData.creativePlan.map(item => ({
+          // ─── FIX: Preserve the real MongoDB _id as-is; only fall back to
+          // a generated temp ID if there is genuinely no _id on the item.
           _id: item._id || generateId(),
           name: item.name || '',
           adType: item.objective || item.adType || '',
@@ -171,14 +170,23 @@ export default function CreativePlanner({
           screenSizes: item.screenSizes || [],
           assignedRole: item.assignedRole || '',
           assignedTeamMembers: item.assignedTeamMembers || [],
-          contentWriter: item.contentWriter || '', // Content Planner
-          adIntent: item.adIntent || '', // Ad intent
-          aiFramework: item.aiFramework || item.framework || '', // AI Framework (support legacy 'framework')
-          aiSubCategory: item.aiSubCategory || item.subCategory || '', // Subcategory (support legacy 'subCategory')
+          contentWriter: item.contentWriter || '',
+          adIntent: item.adIntent || '',
+          aiFramework: item.aiFramework || item.framework || '',
+          aiSubCategory: item.aiSubCategory || item.subCategory || '',
           notes: item.notes || ''
         }));
         setCreativePlan(migratedPlan);
-        // Expand all cards initially
+
+        // ─── FIX: Snapshot the freshly-loaded plan so handleSave can diff
+        // against it to detect NEW assignments after an edit.
+        lastSavedPlanRef.current = migratedPlan.map(r => ({
+          _id: r._id,
+          assignedTeamMembers: [...(r.assignedTeamMembers || [])],
+          contentWriter: r.contentWriter || '',
+          assignedRole: r.assignedRole || ''
+        }));
+
         const expanded = {};
         migratedPlan.forEach(item => {
           expanded[item._id] = true;
@@ -230,10 +238,9 @@ export default function CreativePlanner({
           updatedRow.subType = '';
         }
 
-        // When role changes, clear the team member selection so user can manually select
+        // When role changes, clear the team member selection
         if (field === 'assignedRole') {
           updatedRow.assignedTeamMembers = [];
-          console.log(`Role changed to "${value}", cleared team member selection for manual assignment`);
         }
 
         // Reset aiSubCategory when aiFramework changes
@@ -257,53 +264,33 @@ export default function CreativePlanner({
     setCreativePlan(prev =>
       prev.map(row => {
         if (row._id !== rowId) return row;
-
         const currentSizes = row.screenSizes || [];
         const newSizes = currentSizes.includes(sizeKey)
           ? currentSizes.filter(s => s !== sizeKey)
           : [...currentSizes, sizeKey];
-
         return { ...row, screenSizes: newSizes };
       })
     );
   };
 
-  // Get the project-assigned team members for a role (set by Admin during project creation)
-  // These are the available members that can be manually selected for each creative
+  // Get the project-assigned team members for a role
   const getProjectAssignedMembers = (role) => {
-    console.log('=== getProjectAssignedMembers called ===');
-    console.log('Role requested:', role);
-
-    if (!role) {
-      console.log('No role provided, returning empty array');
-      return [];
-    }
+    if (!role) return [];
 
     const fieldConfig = ROLE_TO_TEAM_FIELD[role];
-    console.log('fieldConfig for role:', fieldConfig);
-
-    if (!fieldConfig) {
-      console.log('No fieldConfig found for role:', role);
-      return [];
-    }
+    if (!fieldConfig) return [];
 
     if (!projectAssignedTeam || Object.keys(projectAssignedTeam).length === 0) {
-      console.log('No projectAssignedTeam data available');
       return [];
     }
 
     const assignedMembers = [];
 
-    // Check new array field first (preferred)
     const arrayField = projectAssignedTeam[fieldConfig.arrayField];
-    console.log(`Array field "${fieldConfig.arrayField}":`, arrayField);
-
     if (arrayField && Array.isArray(arrayField) && arrayField.length > 0) {
       arrayField.forEach(member => {
-        // Handle both populated objects and ObjectId strings
         if (member) {
           if (typeof member === 'object' && member !== null) {
-            // Populated object with _id and name
             if (member._id || member.name) {
               assignedMembers.push({
                 _id: member._id?.toString?.() || member._id || String(member),
@@ -312,7 +299,6 @@ export default function CreativePlanner({
               });
             }
           } else if (typeof member === 'string') {
-            // ObjectId string
             assignedMembers.push({
               _id: member,
               name: 'Team Member',
@@ -321,63 +307,41 @@ export default function CreativePlanner({
           }
         }
       });
-      console.log(`Found ${assignedMembers.length} members from array field`);
     }
 
-    // Fall back to legacy field if no array field data
     if (assignedMembers.length === 0) {
       const legacyField = projectAssignedTeam[fieldConfig.legacyField];
-      console.log(`Checking legacy field "${fieldConfig.legacyField}":`, legacyField);
-
       if (legacyField) {
         if (typeof legacyField === 'object' && legacyField !== null) {
-          // Populated object
           assignedMembers.push({
             _id: legacyField._id?.toString?.() || legacyField._id || String(legacyField),
             name: legacyField.name || 'Unknown',
             isProjectAssigned: true
           });
-          console.log('Found 1 member from legacy field (object)');
         } else if (typeof legacyField === 'string') {
-          // ObjectId string
           assignedMembers.push({
             _id: legacyField,
             name: 'Team Member',
             isProjectAssigned: true
           });
-          console.log('Found 1 member from legacy field (string)');
         }
       }
     }
 
-    console.log(`Returning ${assignedMembers.length} project-assigned members for role "${role}"`);
     return assignedMembers;
   };
 
   // Get Content Planners from project assigned team
   const getContentWriters = () => {
-    console.log('=== getContentWriters called ===');
-    console.log('projectAssignedTeam:', projectAssignedTeam);
-
-    if (!projectAssignedTeam || Object.keys(projectAssignedTeam).length === 0) {
-      console.log('No projectAssignedTeam data available');
-      return [];
-    }
+    if (!projectAssignedTeam || Object.keys(projectAssignedTeam).length === 0) return [];
 
     const contentWriters = [];
-
-    // Check new array field first
     const arrayField = projectAssignedTeam.contentWriters;
-    console.log('contentWriters array field:', arrayField);
 
     if (arrayField && Array.isArray(arrayField) && arrayField.length > 0) {
       arrayField.forEach(member => {
-        console.log('Processing contentWriter member:', member);
-
-        // Handle both populated objects and ObjectId strings
         if (member) {
           if (typeof member === 'object' && member !== null) {
-            // Populated object with _id and name
             if (member._id || member.name) {
               contentWriters.push({
                 _id: member._id?.toString?.() || member._id || String(member),
@@ -385,49 +349,30 @@ export default function CreativePlanner({
               });
             }
           } else if (typeof member === 'string') {
-            // ObjectId string - need to fetch name (use placeholder for now)
-            contentWriters.push({
-              _id: member,
-              name: 'Team Member' // Placeholder - actual name should be populated
-            });
+            contentWriters.push({ _id: member, name: 'Team Member' });
           }
         }
       });
-      console.log(`Found ${contentWriters.length} Content Planners from array field`);
     }
 
-    // Fall back to legacy field if no array field data
     if (contentWriters.length === 0) {
       const legacyField = projectAssignedTeam.contentWriter;
-      console.log('Checking legacy contentWriter field:', legacyField);
-
       if (legacyField) {
         if (typeof legacyField === 'object' && legacyField !== null) {
-          // Populated object
           contentWriters.push({
             _id: legacyField._id?.toString?.() || legacyField._id || String(legacyField),
             name: legacyField.name || 'Unknown'
           });
-          console.log('Found 1 Content Planner from legacy field (object)');
         } else if (typeof legacyField === 'string') {
-          // ObjectId string
-          contentWriters.push({
-            _id: legacyField,
-            name: 'Team Member'
-          });
-          console.log('Found 1 Content Planner from legacy field (string)');
+          contentWriters.push({ _id: legacyField, name: 'Team Member' });
         }
       }
     }
 
-    console.log(`getContentWriters returning ${contentWriters.length} writers:`, contentWriters);
     return contentWriters;
   };
 
-  // Memoize Content Planners to avoid recalculating on every render
-  const availableContentWriters = useMemo(() => {
-    return getContentWriters();
-  }, [projectAssignedTeam]);
+  const availableContentWriters = useMemo(() => getContentWriters(), [projectAssignedTeam]);
 
   // Calculate totals
   const totalCreatives = creativePlan.length;
@@ -435,8 +380,75 @@ export default function CreativePlanner({
   const videoCount = creativePlan.filter(c => c.creativeType === 'VIDEO').length;
   const carouselCount = creativePlan.filter(c => c.creativeType === 'CAROUSEL').length;
 
+  // ─── FIX: Diff current plan against last-saved snapshot to find
+  // creatives whose assignments have changed (or are brand new rows).
+  // Returns an array of { rowId, isNewRow, changedAssignments } descriptors
+  // that the parent's onSave handler can use to trigger task creation.
+  const buildAssignmentDiff = (currentPlan) => {
+    const previousMap = new Map(
+      lastSavedPlanRef.current.map(r => [String(r._id), r])
+    );
+
+    const diff = [];
+
+    currentPlan.forEach(row => {
+      const rowId = String(row._id);
+      const isNewRow = isTemporaryId(row._id);
+      const prev = previousMap.get(rowId);
+
+      if (isNewRow) {
+        // Brand-new creative — all assignments are "new"
+        diff.push({
+          rowId,
+          isNewRow: true,
+          assignedRole: row.assignedRole || '',
+          newTeamMembers: [...(row.assignedTeamMembers || [])],
+          newContentWriter: row.contentWriter || ''
+        });
+        return;
+      }
+
+      if (!prev) {
+        // Row exists in DB but wasn't in the last snapshot (edge case) — treat as new
+        diff.push({
+          rowId,
+          isNewRow: false,
+          assignedRole: row.assignedRole || '',
+          newTeamMembers: [...(row.assignedTeamMembers || [])],
+          newContentWriter: row.contentWriter || ''
+        });
+        return;
+      }
+
+      // Compare team member assignments
+      const prevMembers = new Set((prev.assignedTeamMembers || []).map(String));
+      const currMembers = (row.assignedTeamMembers || []).map(String);
+      const addedMembers = currMembers.filter(m => !prevMembers.has(m));
+
+      // Compare content writer
+      const prevWriter = String(prev.contentWriter || '');
+      const currWriter = String(row.contentWriter || '');
+      const writerChanged = currWriter && currWriter !== prevWriter;
+
+      if (addedMembers.length > 0 || writerChanged) {
+        diff.push({
+          rowId,
+          isNewRow: false,
+          assignedRole: row.assignedRole || '',
+          newTeamMembers: addedMembers,
+          newContentWriter: writerChanged ? currWriter : ''
+        });
+      }
+    });
+
+    return diff;
+  };
+
   // Handle save
   const handleSave = async (markComplete = false) => {
+    // ─── FIX: Guard against concurrent saves
+    if (saving) return;
+
     try {
       setSaving(true);
 
@@ -451,9 +463,13 @@ export default function CreativePlanner({
 
       if (markComplete && validCreatives.length === 0) {
         toast.error('Please add at least one creative with all fields filled');
-        setSaving(false);
-        return;
+        return; // finally block resets saving
       }
+
+      // ─── FIX: Build assignment diff BEFORE serialising, so we can pass
+      // it to onSave and let the parent trigger task-creation for any
+      // newly assigned or changed team members (including edits/additions).
+      const assignmentDiff = buildAssignmentDiff(creativePlan);
 
       const data = {
         creativePlan: creativePlan.map((row, index) => ({
@@ -463,25 +479,55 @@ export default function CreativePlanner({
           screenSizes: row.screenSizes || [],
           assignedRole: row.assignedRole || '',
           assignedTeamMembers: row.assignedTeamMembers || [],
-          contentWriter: row.contentWriter || '', // Content Planner
-          adIntent: row.adIntent || '', // Ad intent
-          aiFramework: row.aiFramework || '', // AI Framework
-          aiSubCategory: row.aiSubCategory || '', // Subcategory
+          contentWriter: row.contentWriter || '',
+          adIntent: row.adIntent || '',
+          aiFramework: row.aiFramework || '',
+          aiSubCategory: row.aiSubCategory || '',
           notes: row.notes || '',
           name: row.name || `Creative ${index + 1}`,
           order: index,
-          _id: row._id && !row._id.toString().startsWith('creative_') ? row._id : undefined
+          // ─── FIX (core): Preserve the real MongoDB _id on existing rows.
+          //
+          // BEFORE (broken):
+          //   _id: row._id && !row._id.toString().startsWith('creative_') ? row._id : undefined
+          //   ^ This sent `undefined` for real DB IDs because real IDs do NOT
+          //     start with 'creative_', so the condition was ALWAYS false for
+          //     persisted rows — stripping every existing _id on every save.
+          //
+          // AFTER (fixed):
+          //   Send the real _id for persisted rows; omit it for new temp rows
+          //   so the backend creates a fresh document instead of trying to
+          //   upsert with a synthetic local ID.
+          _id: isTemporaryId(row._id) ? undefined : row._id
         })),
         additionalNotes,
-        isCompleted: markComplete
+        isCompleted: markComplete,
+        // ─── FIX: Pass the diff so the parent/backend can create tasks for
+        // any newly assigned team members (covers the edit-and-add scenario).
+        assignmentDiff
       };
 
       await onSave(data, markComplete);
+
+      // ─── FIX: Update the snapshot AFTER a successful save so subsequent
+      // edits in the same session are diffed against the fresh baseline.
+      lastSavedPlanRef.current = creativePlan.map(r => ({
+        // After save, new rows will have been assigned real IDs by the
+        // backend and returned via initialData re-hydration. Until then
+        // we track them by their temp ID so re-edits before refresh still
+        // diff correctly.
+        _id: r._id,
+        assignedTeamMembers: [...(r.assignedTeamMembers || [])],
+        contentWriter: r.contentWriter || '',
+        assignedRole: r.assignedRole || ''
+      }));
+
       toast.success(markComplete ? 'Creative strategy completed!' : 'Progress saved!');
     } catch (error) {
       console.error('Save error:', error);
       toast.error(error?.message || 'Failed to save');
     } finally {
+      // ─── FIX: Always reset saving flag, even if an error was thrown
       setSaving(false);
     }
   };
@@ -597,7 +643,6 @@ export default function CreativePlanner({
                 <CardBody className="p-4 space-y-4">
                   {/* Row 1: Creative Name & Ad Type */}
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Creative Name */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                         <FileText className="w-4 h-4 text-gray-400" />
@@ -613,7 +658,6 @@ export default function CreativePlanner({
                       />
                     </div>
 
-                    {/* Ad Type (Objective) */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                         <Target className="w-4 h-4 text-gray-400" />
@@ -635,7 +679,6 @@ export default function CreativePlanner({
 
                   {/* Row 2: Creative Type & Sub-Type */}
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Creative Type */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                         <Type className="w-4 h-4 text-gray-400" />
@@ -645,6 +688,7 @@ export default function CreativePlanner({
                         value={row.creativeType}
                         onChange={(e) => updateCreativeRow(row._id, 'creativeType', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        disabled={readOnly}
                       >
                         {CREATIVE_TYPES.map(type => (
                           <option key={type.key} value={type.key}>{type.label}</option>
@@ -652,7 +696,6 @@ export default function CreativePlanner({
                       </select>
                     </div>
 
-                    {/* Sub-Type */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                         <FileImage className="w-4 h-4 text-gray-400" />
@@ -662,6 +705,7 @@ export default function CreativePlanner({
                         value={row.subType || ''}
                         onChange={(e) => updateCreativeRow(row._id, 'subType', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        disabled={readOnly}
                       >
                         <option value="">Select sub-type...</option>
                         {subTypes.map(subType => (
@@ -683,7 +727,8 @@ export default function CreativePlanner({
                         return (
                           <button
                             key={size.key}
-                            onClick={() => toggleScreenSize(row._id, size.key)}
+                            onClick={() => !readOnly && toggleScreenSize(row._id, size.key)}
+                            disabled={readOnly}
                             className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                               isSelected
                                 ? 'bg-primary-100 border-primary-300 text-primary-700'
@@ -699,7 +744,6 @@ export default function CreativePlanner({
 
                   {/* Row 4: Assigned Role & Team Members */}
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Assigned Role */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                         <Users className="w-4 h-4 text-gray-400" />
@@ -709,18 +753,16 @@ export default function CreativePlanner({
                         value={row.assignedRole || ''}
                         onChange={(e) => updateCreativeRow(row._id, 'assignedRole', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        disabled={readOnly}
                       >
                         <option value="">Select role...</option>
                         {CREATIVE_ROLES.filter(role => role.key !== 'content_writer').map(role => (
                           <option key={role.key} value={role.key}>{role.label}</option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Who creates the visual creative
-                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Who creates the visual creative</p>
                     </div>
 
-                    {/* Team Members - Dropdown for manual selection */}
                     <div>
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                         <UserPlus className="w-4 h-4 text-gray-400" />
@@ -732,6 +774,7 @@ export default function CreativePlanner({
                             value={(row.assignedTeamMembers && row.assignedTeamMembers[0]) || ''}
                             onChange={(e) => updateCreativeRow(row._id, 'assignedTeamMembers', e.target.value ? [e.target.value] : [])}
                             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            disabled={readOnly}
                           >
                             <option value="">Select team member...</option>
                             {getProjectAssignedMembers(row.assignedRole).map(member => (
@@ -741,8 +784,8 @@ export default function CreativePlanner({
                             ))}
                           </select>
                           {getProjectAssignedMembers(row.assignedRole).length === 0 && (
-                            <p className="text-xs text-amber-600 mt-1">
-                              ⚠️ No team members assigned for this role. Contact Admin to assign.
+                            <p className="text-xs text-gray-500 mt-1">
+                              No team members assigned for this role yet.
                             </p>
                           )}
                           {getProjectAssignedMembers(row.assignedRole).length > 0 && (
@@ -770,6 +813,7 @@ export default function CreativePlanner({
                         value={row.contentWriter || ''}
                         onChange={(e) => updateCreativeRow(row._id, 'contentWriter', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        disabled={readOnly}
                       >
                         <option value="">Select Content Planner...</option>
                         {availableContentWriters.map(writer => (
@@ -779,15 +823,13 @@ export default function CreativePlanner({
                         ))}
                       </select>
                       {availableContentWriters.length === 0 && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          ⚠️ No Content Planners assigned to project. Contact Admin.
+                        <p className="text-xs text-gray-500 mt-1">
+                          No Content Planners assigned yet.
                         </p>
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        &nbsp;
-                      </label>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">&nbsp;</label>
                       <p className="text-xs text-gray-500 italic">
                         The Content Planner creates the copy/text for this creative.
                         Select from writers assigned to the project by Admin.
@@ -807,6 +849,7 @@ export default function CreativePlanner({
                           value={row.aiFramework || ''}
                           onChange={(e) => updateCreativeRow(row._id, 'aiFramework', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                          disabled={readOnly}
                         >
                           <option value="">Select Framework...</option>
                           {FRAMEWORK_OPTIONS.map(fw => (
@@ -827,7 +870,7 @@ export default function CreativePlanner({
                           value={row.aiSubCategory || ''}
                           onChange={(e) => updateCreativeRow(row._id, 'aiSubCategory', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-                          disabled={!row.aiFramework}
+                          disabled={!row.aiFramework || readOnly}
                         >
                           <option value="">No subcategory (framework-level)</option>
                           {getSubCategoriesForFramework(row.aiFramework).map(cat => (
@@ -857,6 +900,7 @@ export default function CreativePlanner({
                       onChange={(e) => updateCreativeRow(row._id, 'adIntent', e.target.value)}
                       placeholder="e.g., UGC ads, testimonial ads, product demo..."
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      disabled={readOnly}
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Define the type of ads (e.g., UGC ads, testimonial ads, product demo)
@@ -873,6 +917,7 @@ export default function CreativePlanner({
                       onChange={(e) => updateCreativeRow(row._id, 'notes', e.target.value)}
                       placeholder="Add any notes or instructions..."
                       rows={2}
+                      disabled={readOnly}
                     />
                   </div>
                 </CardBody>
@@ -918,14 +963,14 @@ export default function CreativePlanner({
             onClick={() => handleSave(false)}
             disabled={saving}
           >
-            Save Progress
+            {saving ? 'Saving...' : 'Save Progress'}
           </Button>
           <Button
             onClick={() => handleSave(true)}
             disabled={saving || isCompleted}
           >
             <CheckCircle className="w-4 h-4 mr-2" />
-            Complete & Continue
+            {saving ? 'Saving...' : 'Complete & Continue'}
           </Button>
         </div>
       )}

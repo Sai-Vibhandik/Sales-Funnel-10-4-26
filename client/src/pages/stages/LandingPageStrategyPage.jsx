@@ -70,21 +70,28 @@ export default function LandingPageStrategyPage() {
       setLoading(true);
 
       const projectRes = await projectService.getProject(projectId);
+      console.log('=== LandingPageStrategyPage fetchData ===');
+      console.log('projectRes.data:', projectRes.data);
       setProject(projectRes.data);
 
       // Extract designers and developers from project's assigned team
       const assignedTeam = projectRes.data.assignedTeam || {};
+      console.log('assignedTeam:', assignedTeam);
+      console.log('uiUxDesigners:', assignedTeam.uiUxDesigners);
+      console.log('developers:', assignedTeam.developers);
 
-      // Get UI/UX Designers
+      // Get UI/UX Designers - support both array and legacy single field
       const uiUxDesigners = assignedTeam.uiUxDesigners || [];
       const uiUxDesignerLegacy = assignedTeam.uiUxDesigner;
       const allDesigners = uiUxDesigners.length > 0 ? uiUxDesigners : (uiUxDesignerLegacy ? [uiUxDesignerLegacy] : []);
+      console.log('allDesigners:', allDesigners);
       setDesigners(allDesigners);
 
-      // Get Developers
+      // Get Developers - support both array and legacy single field
       const developersList = assignedTeam.developers || [];
       const developerLegacy = assignedTeam.developer;
       const allDevelopers = developersList.length > 0 ? developersList : (developerLegacy ? [developerLegacy] : []);
+      console.log('allDevelopers:', allDevelopers);
       setDevelopers(allDevelopers);
 
       // Check if traffic strategy is completed
@@ -136,15 +143,16 @@ export default function LandingPageStrategyPage() {
       return;
     }
 
-    if (!assignedDesigner) {
-      toast.error('Please select a UI/UX Designer for this landing page');
-      return;
-    }
+    // Team assignments are optional - Performance Marketer can add them later
+    // if (!assignedDesigner) {
+    //   toast.error('Please select a UI/UX Designer for this landing page');
+    //   return;
+    // }
 
-    if (!assignedDeveloper) {
-      toast.error('Please select a Developer for this landing page');
-      return;
-    }
+    // if (!assignedDeveloper) {
+    //   toast.error('Please select a Developer for this landing page');
+    //   return;
+    // }
 
     try {
       setSaving(true);
@@ -189,15 +197,16 @@ export default function LandingPageStrategyPage() {
       return;
     }
 
-    if (!assignedDesigner) {
-      toast.error('Please select a UI/UX Designer for this landing page');
-      return;
-    }
+    // Team assignments are optional - Performance Marketer can add them later
+    // if (!assignedDesigner) {
+    //   toast.error('Please select a UI/UX Designer for this landing page');
+    //   return;
+    // }
 
-    if (!assignedDeveloper) {
-      toast.error('Please select a Developer for this landing page');
-      return;
-    }
+    // if (!assignedDeveloper) {
+    //   toast.error('Please select a Developer for this landing page');
+    //   return;
+    // }
 
     try {
       setSaving(true);
@@ -381,8 +390,8 @@ export default function LandingPageStrategyPage() {
                 ))}
               </select>
               {designers.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  ⚠️ No UI/UX Designers assigned to this project. Contact Admin.
+                <p className="text-xs text-gray-500 mt-1">
+                  No UI/UX Designers assigned yet. You can assign them later from the team settings.
                 </p>
               )}
             </div>
@@ -405,8 +414,8 @@ export default function LandingPageStrategyPage() {
                 ))}
               </select>
               {developers.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  ⚠️ No Developers assigned to this project. Contact Admin.
+                <p className="text-xs text-gray-500 mt-1">
+                  No Developers assigned yet. You can assign them later from the team settings.
                 </p>
               )}
             </div>

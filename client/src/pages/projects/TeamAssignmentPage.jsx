@@ -211,7 +211,8 @@ export default function TeamAssignmentPage() {
 
       await projectService.assignTeam(id, assignedTeamData);
       toast.success('Team assigned successfully!');
-      navigate('/dashboard/projects');
+      // Navigate back to project detail page so user can see assigned team
+      navigate(`/dashboard/projects/${id}`);
     } catch (error) {
       console.error('handleSave error:', error);
       toast.error(error.message || 'Failed to assign team');

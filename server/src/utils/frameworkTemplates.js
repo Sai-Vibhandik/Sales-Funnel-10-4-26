@@ -986,6 +986,90 @@ OUTPUT REQUIREMENTS:
 
 Generate the complete 4P content now:`,
 
+  // UI_DESIGN - UI/UX Design Brief Framework
+  UI_DESIGN: `You are an expert UI/UX designer assistant specializing in creating comprehensive design briefs.
+
+Generate a detailed design brief for landing pages and UI components based on the provided context.
+
+INPUT DATA:
+- Project: {{projectName}}
+- Business: {{businessName}}
+- Industry: {{industry}}
+- Task: {{taskTitle}}
+- Platform: {{platform}}
+- Funnel Stage: {{funnelStage}}
+- Target Audience: {{targetAudience}}
+- Offer: {{offer}}
+- Pain Points: {{painPoints}}
+- Desires: {{desires}}
+- Hook: {{hook}}
+- Headline: {{headline}}
+- CTA: {{cta}}
+
+TASK:
+Create a comprehensive UI/UX design brief that covers:
+
+1. DESIGN OBJECTIVES
+   - Primary conversion goal
+   - Secondary objectives
+   - Key performance indicators
+   - Success metrics
+
+2. TARGET USER CONSIDERATIONS
+   - User demographics and psychographics
+   - User goals and expectations
+   - User journey considerations
+   - Accessibility requirements
+
+3. VISUAL STYLE GUIDELINES
+   - Color palette recommendations (primary, secondary, accent)
+   - Typography hierarchy
+   - Imagery style and direction
+   - Brand consistency elements
+   - Visual tone (professional, playful, modern, etc.)
+
+4. LAYOUT RECOMMENDATIONS
+   - Above-the-fold priorities
+   - Section hierarchy
+   - Content placement strategy
+   - White space usage
+   - Grid and alignment
+
+5. USER EXPERIENCE FLOW
+   - Navigation structure
+   - Interaction patterns
+   - Micro-animations and transitions
+   - Loading states
+   - Error handling UX
+
+6. RESPONSIVE CONSIDERATIONS
+   - Mobile-first approach
+   - Tablet adaptations
+   - Desktop optimization
+   - Breakpoint recommendations
+
+7. ACCESSIBILITY REQUIREMENTS
+   - WCAG compliance level
+   - Color contrast considerations
+   - Screen reader compatibility
+   - Keyboard navigation
+
+8. TECHNICAL CONSTRAINTS
+   - Performance optimization
+   - Browser compatibility
+   - Image format recommendations
+   - Animation performance
+
+OUTPUT REQUIREMENTS:
+- Clear, actionable design direction
+- Specific color codes and font suggestions
+- Layout wireframe description
+- Component specifications
+- Interaction guidelines
+- Accessibility checklist
+
+Generate the complete design brief now:`,
+
   // MASTER - Multi-Framework Master Prompt
   MASTER: `You are a master copywriter with expertise in all major marketing frameworks.
 
@@ -1077,6 +1161,7 @@ function getFrameworkTypes() {
     { value: 'SLAP', label: 'SLAP - Stop-Look-Act-Purchase' },
     { value: 'HOOK_STORY_OFFER', label: 'Hook-Story-Offer' },
     { value: '4P', label: '4P - Picture-Promise-Prove-Push' },
+    { value: 'UI_DESIGN', label: 'UI/UX Design Brief' },
     { value: 'MASTER', label: 'MASTER - Multi-Framework (Recommended)' }
   ];
 }
@@ -1102,7 +1187,11 @@ function replaceTemplatePlaceholders(template, context) {
     '{{offer}}': context.offer || '',
     '{{hook}}': context.hook || '',
     '{{headline}}': context.headline || '',
-    '{{cta}}': context.cta || ''
+    '{{cta}}': context.cta || '',
+    '{{projectName}}': context.projectName || '',
+    '{{businessName}}': context.businessName || '',
+    '{{taskTitle}}': context.taskTitle || '',
+    '{{targetAudience}}': context.targetAudience || ''
   };
 
   for (const [placeholder, value] of Object.entries(placeholders)) {

@@ -118,12 +118,12 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
       return;
     }
 
-    // Check if all landing pages have team assignments
-    const unassignedLPs = landingPages.filter(lp => !lp.assignedDesigner || !lp.assignedDeveloper);
-    if (unassignedLPs.length > 0) {
-      toast.error(`${unassignedLPs.length} landing page(s) missing team assignments. Please edit and assign designer/developer.`);
-      return;
-    }
+    // Team assignments are optional - Performance Marketer can add them later
+    // const unassignedLPs = landingPages.filter(lp => !lp.assignedDesigner || !lp.assignedDeveloper);
+    // if (unassignedLPs.length > 0) {
+    //   toast.error(`${unassignedLPs.length} landing page(s) missing team assignments. Please edit and assign designer/developer.`);
+    //   return;
+    // }
 
     try {
       setCompleting(true);

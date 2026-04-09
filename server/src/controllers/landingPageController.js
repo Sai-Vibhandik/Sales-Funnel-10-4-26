@@ -354,6 +354,14 @@ exports.completeLandingPage = async (req, res, next) => {
       });
     }
 
+    // FIX: Prevent re-completing an already completed landing page to avoid duplicate tasks
+    if (landingPage.isCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Landing page is already completed'
+      });
+    }
+
     // Mark as completed
     landingPage.isCompleted = true;
     landingPage.completedAt = new Date();
@@ -371,7 +379,7 @@ exports.completeLandingPage = async (req, res, next) => {
       await completeStage(projectId, 'landingPage');
     }
 
-    // Generate tasks for this landing page
+    // FIX: Check for existing tasks before generating to prevent duplicates
     const tasksCreated = await generateLandingPageTasks(project, landingPage, req.user._id);
 
     // Get updated project
@@ -400,7 +408,19 @@ exports.completeLandingPage = async (req, res, next) => {
 };
 
 // Helper function to generate tasks for a landing page
+// FIX: Checks for existing tasks first to prevent duplicates on re-runs
 const generateLandingPageTasks = async (project, landingPage, userId) => {
+  // Check if tasks already exist for this landing page
+  const existingTasks = await Task.find({
+    landingPageId: landingPage._id,
+    projectId: project._id
+  });
+
+  if (existingTasks.length > 0) {
+    console.warn(`Tasks already exist for landing page ${landingPage._id}, skipping task generation.`);
+    return existingTasks;
+  }
+
   const tasks = [];
 
   // Get strategy context for task generation
@@ -417,26 +437,43 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
   // Build strategy context
   const strategyContext = {
     businessName: project.businessName || project.customerName,
-    industry: '',
+    industry: project.industry || '',
     platform: landingPage.platform,
     hook: landingPage.hook,
     creativeAngle: landingPage.angle,
     headline: landingPage.headline,
     cta: landingPage.ctaText,
-    targetAudience: '',
+    targetAudience: marketResearch?.targetAudience || '',
     painPoints: marketResearch?.painPoints || [],
     desires: marketResearch?.desires || [],
     offer: offer?.bonuses?.map(b => b.title).join(', ') || ''
   };
 
-  // Create design task
-  // Get UI/UX designer from either new array field or legacy field
-  const uiuxDesignerId = project.assignedTeam?.uiUxDesigners?.[0]?._id ||
-                          project.assignedTeam?.uiUxDesigners?.[0] ||
-                          project.assignedTeam?.uiUxDesigner?._id ||
-                          project.assignedTeam?.uiUxDesigner ||
-                          null;
+  // Resolve UI/UX designer:
+  // Priority: landing page's assignedDesigner → project team's uiUxDesigners[0] → legacy uiUxDesigner
+  const uiuxDesignerId =
+    landingPage.assignedDesigner?._id ||
+    landingPage.assignedDesigner ||
+    project.assignedTeam?.uiUxDesigners?.[0]?._id ||
+    project.assignedTeam?.uiUxDesigners?.[0] ||
+    project.assignedTeam?.uiUxDesigner?._id ||
+    project.assignedTeam?.uiUxDesigner ||
+    null;
 
+  // Resolve developer:
+  // Priority: landing page's assignedDeveloper → project team's developers[0] → legacy developer
+  const developerId =
+    landingPage.assignedDeveloper?._id ||
+    landingPage.assignedDeveloper ||
+    project.assignedTeam?.developers?.[0]?._id ||
+    project.assignedTeam?.developers?.[0] ||
+    project.assignedTeam?.developer?._id ||
+    project.assignedTeam?.developer ||
+    null;
+
+  const contextLink = `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`;
+
+  // Create design task
   const designTask = {
     projectId: project._id,
     organizationId: project.organizationId,
@@ -450,18 +487,10 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
     createdBy: userId,
     status: 'design_pending',
     strategyContext,
-    contextLink: `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`
+    contextLink
   };
 
-  // Create development task
-  // IMPORTANT: Developer is NOT assigned here. They will be assigned when design is approved by marketer.
-  // Get developer from either new array field or legacy field
-  const developerId = project.assignedTeam?.developers?.[0]?._id ||
-                      project.assignedTeam?.developers?.[0] ||
-                      project.assignedTeam?.developer?._id ||
-                      project.assignedTeam?.developer ||
-                      null;
-
+  // Create development task — assignedTo is null until design is approved
   const devTask = {
     projectId: project._id,
     organizationId: project.organizationId,
@@ -470,25 +499,26 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
     taskType: 'landing_page_development',
     assetType: 'landing_page_page',
     assignedRole: 'developer',
-    assignedTo: null,  // Developer will be assigned when design is approved
-    developerId: developerId,  // Store for later assignment
+    assignedTo: null,       // Assigned after design approval
+    developerId: developerId, // Stored for later assignment
     assignedBy: userId,
     createdBy: userId,
     status: 'development_pending',
     description: 'This task will become active after the design is approved by the tester and marketer.',
     strategyContext,
-    contextLink: `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`
+    contextLink
   };
 
   tasks.push(designTask, devTask);
 
   const createdTasks = await Task.insertMany(tasks);
 
-  // Send notifications if assignees exist
+  // Send notifications to assigned users
   const Notification = require('../models/Notification');
-  for (const task of createdTasks) {
-    if (task.assignedTo) {
-      await Notification.create({
+  const notificationPromises = createdTasks
+    .filter(task => task.assignedTo)
+    .map(task =>
+      Notification.create({
         recipient: task.assignedTo,
         type: 'task_assigned',
         title: 'New Task Assigned',
@@ -496,9 +526,10 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
         projectId: project._id,
         organizationId: project.organizationId,
         taskId: task._id
-      });
-    }
-  }
+      })
+    );
+
+  await Promise.all(notificationPromises);
 
   return createdTasks;
 };

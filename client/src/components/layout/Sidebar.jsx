@@ -46,6 +46,7 @@ const navigationByRole = {
     { name: 'Users', href: '/dashboard/platform-admin?tab=users', icon: Users },
     { name: 'Plans', href: '/dashboard/platform-admin?tab=plans', icon: CheckSquare },
     { name: 'Prompts', href: '/dashboard/platform-admin?tab=prompts', icon: PenTool },
+    { name: 'SOP Library', href: '/dashboard/platform-admin?tab=sop-library', icon: BookOpen },
     { name: 'Activity Logs', href: '/dashboard/platform-admin?tab=logs', icon: FileCheck },
   ],
 
@@ -95,6 +96,7 @@ const navigationByRole = {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'My Projects', href: '/dashboard/projects', icon: FolderKanban },
     { name: 'My Tasks', href: '/dashboard/tasks', icon: CheckSquare },
+    { name: 'SOP Library', href: '/dashboard/sop-library', icon: BookOpen },
   ],
 
   // UI/UX DESIGNER

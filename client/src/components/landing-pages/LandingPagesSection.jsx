@@ -55,18 +55,28 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
 
   // Fetch available designers and developers from project's assigned team
   useEffect(() => {
+    console.log('=== LandingPagesSection useEffect ===');
+    console.log('assignedTeam prop:', assignedTeam);
     if (assignedTeam) {
       // Get UI/UX Designers from project's assigned team
       const uiUxDesigners = assignedTeam.uiUxDesigners || [];
       const uiUxDesignerLegacy = assignedTeam.uiUxDesigner;
       const allDesigners = uiUxDesigners.length > 0 ? uiUxDesigners : (uiUxDesignerLegacy ? [uiUxDesignerLegacy] : []);
+      console.log('uiUxDesigners:', uiUxDesigners);
+      console.log('uiUxDesignerLegacy:', uiUxDesignerLegacy);
+      console.log('allDesigners:', allDesigners);
       setDesigners(allDesigners);
 
       // Get Developers from project's assigned team
       const developersList = assignedTeam.developers || [];
       const developerLegacy = assignedTeam.developer;
       const allDevelopers = developersList.length > 0 ? developersList : (developerLegacy ? [developerLegacy] : []);
+      console.log('developers:', developersList);
+      console.log('developerLegacy:', developerLegacy);
+      console.log('allDevelopers:', allDevelopers);
       setDevelopers(allDevelopers);
+    } else {
+      console.log('No assignedTeam prop provided');
     }
   }, [assignedTeam]);
 
@@ -293,8 +303,8 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
                     ))}
                   </select>
                   {designers.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      ⚠️ No UI/UX Designers assigned to this project. Contact Admin.
+                    <p className="text-xs text-gray-500 mt-1">
+                      No UI/UX Designers assigned yet. You can assign them later from team settings.
                     </p>
                   )}
                 </div>
@@ -316,8 +326,8 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
                     ))}
                   </select>
                   {developers.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      ⚠️ No Developers assigned to this project. Contact Admin.
+                    <p className="text-xs text-gray-500 mt-1">
+                      No Developers assigned yet. You can assign them later from team settings.
                     </p>
                   )}
                 </div>
