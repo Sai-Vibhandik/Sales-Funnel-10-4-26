@@ -124,6 +124,10 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       });
     }
 
+    // Check if strategy was already completed before this update
+    const existingStrategy = await CreativeStrategy.findOne({ projectId });
+    const wasAlreadyCompleted = existingStrategy?.isCompleted || false;
+
     const {
       stages,
       creativeBrief,
@@ -172,10 +176,16 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       createdBy: req.user._id
     };
 
-    // If marking as completed
+    // Handle completion status:
+    // - If marking as completed for the first time: set isCompleted and completedAt
+    // - If updating an already-completed strategy: preserve isCompleted and completedAt
     if (isCompleted) {
       creativeData.isCompleted = true;
       creativeData.completedAt = new Date();
+    } else if (wasAlreadyCompleted) {
+      // Preserve existing completion status when updating an already-completed strategy
+      creativeData.isCompleted = true;
+      creativeData.completedAt = existingStrategy.completedAt;
     }
 
     console.log('Creative data to save:', JSON.stringify(creativeData, null, 2));
@@ -212,10 +222,21 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       }
     }
 
-    // If completed, update project stage and generate tasks
-    if (isCompleted) {
-      // Update stage completion
-      if (!project.stages.creativeStrategy.isCompleted) {
+    // Determine if tasks should be generated:
+    // 1. Strategy is being marked as completed for the first time (isCompleted = true)
+    // 2. Strategy was already completed and is being updated (wasAlreadyCompleted = true)
+    // This ensures new creative items added to an already-completed strategy get tasks
+    const shouldGenerateTasks = isCompleted || wasAlreadyCompleted;
+
+    console.log(`\n=== TASK GENERATION CHECK ===`);
+    console.log(`isCompleted (request): ${isCompleted}`);
+    console.log(`wasAlreadyCompleted: ${wasAlreadyCompleted}`);
+    console.log(`shouldGenerateTasks: ${shouldGenerateTasks}`);
+
+    // If completed (or updating an already-completed strategy), update project stage and generate tasks
+    if (shouldGenerateTasks) {
+      // Update stage completion (only if marking as completed for the first time)
+      if (isCompleted && !project.stages.creativeStrategy.isCompleted) {
         await completeStage(projectId, 'creativeStrategy', req.user._id);
       }
 
