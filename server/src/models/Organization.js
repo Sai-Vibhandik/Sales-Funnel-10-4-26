@@ -181,15 +181,15 @@ const organizationSchema = new mongoose.Schema({
 
 // Update usage statistics
 organizationSchema.methods.updateUsage = async function() {
-  const User = mongoose.model('User');
+  const Membership = mongoose.model('Membership');
   const Project = mongoose.model('Project');
-  const Task = mongoose.model('Task');
 
   const [usersCount, projectsCount] = await Promise.all([
-    User.countDocuments({
-      organizations: { $elemMatch: { organizationId: this._id, status: 'active' } }
+    Membership.countDocuments({
+      organizationId: this._id,
+      status: 'active'
     }),
-    Project.countDocuments({ organizationId: this._id, isActive: true })
+    Project.countDocuments({ organizationId: this._id })
   ]);
 
   this.usage.usersCount = usersCount;

@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { projectService, clientService } from '@/services/api';
 import { Card, CardBody, CardHeader, Button, Input } from '@/components/ui';
-import { ArrowLeft, Search, User, Building, Mail, Phone, X, Loader2, MapPin } from 'lucide-react';
+import { ArrowLeft, Search, User, Building, Mail, Phone, X, Loader2, MapPin, ChevronDown } from 'lucide-react';
 
 const projectSchema = z.object({
   projectName: z.string().min(2, 'Project name must be at least 2 characters').optional().or(z.literal('')),
@@ -30,9 +30,11 @@ export default function CreateProjectPage() {
   const [loading, setLoading] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [clients, setClients] = useState([]);
+  const [allClients, setAllClients] = useState([]); // Store all clients for dropdown
   const [selectedClient, setSelectedClient] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const searchRef = useRef(null);
   const navigate = useNavigate();
 
@@ -73,38 +75,54 @@ export default function CreateProjectPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Search clients
+  // Load all clients on mount for dropdown
   useEffect(() => {
-    const searchClients = async () => {
-      if (clientSearch.length < 2) {
-        setClients([]);
-        return;
-      }
-
+    const loadAllClients = async () => {
       try {
-        setSearchLoading(true);
-        const response = await clientService.searchClients(clientSearch);
-        setClients(response.data || []);
-        setShowDropdown(true);
+        const response = await clientService.getClients();
+        setAllClients(response.data || []);
+        setInitialLoadDone(true);
       } catch (error) {
-        console.error('Error searching clients:', error);
-      } finally {
-        setSearchLoading(false);
+        console.error('Error loading clients:', error);
+        setInitialLoadDone(true);
       }
     };
+    loadAllClients();
+  }, []);
 
-    const debounceTimer = setTimeout(searchClients, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [clientSearch]);
+  // Filter clients based on search or show all
+  useEffect(() => {
+    if (!showDropdown) return;
+
+    if (clientSearch.length < 2) {
+      // Show all clients when not searching
+      setClients(allClients);
+    } else {
+      // Filter clients locally
+      const searchLower = clientSearch.toLowerCase();
+      const filtered = allClients.filter(client =>
+        client.customerName?.toLowerCase().includes(searchLower) ||
+        client.businessName?.toLowerCase().includes(searchLower) ||
+        client.email?.toLowerCase().includes(searchLower)
+      );
+      setClients(filtered);
+    }
+  }, [clientSearch, allClients, showDropdown]);
+
+  // Handle input focus - show dropdown with all clients
+  const handleInputFocus = () => {
+    if (!selectedClient) {
+      setShowDropdown(true);
+      if (clientSearch.length < 2) {
+        setClients(allClients);
+      }
+    }
+  };
 
   const handleSelectClient = (client) => {
-    console.log('Selected client data:', client);
-    console.log('Client address:', client.address);
-
     setSelectedClient(client);
     setClientSearch('');
     setShowDropdown(false);
-    setClients([]);
 
     // Prefill form with client data
     setValue('customerName', client.customerName || '');
@@ -114,10 +132,8 @@ export default function CreateProjectPage() {
     if (client.industry) setValue('industry', client.industry);
     if (client.description) setValue('description', client.description);
 
-    // Prefill address - handle both nested object and flat structure
+    // Prefill address
     const addressData = client.address || {};
-    console.log('Address data to set:', addressData);
-
     setValue('address.street', addressData.street || '');
     setValue('address.city', addressData.city || '');
     setValue('address.state', addressData.state || '');
@@ -279,53 +295,54 @@ export default function CreateProjectPage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search clients by name, business, or email..."
+                placeholder="Search or select client..."
                 value={clientSearch}
                 onChange={(e) => setClientSearch(e.target.value)}
-                onFocus={() => clients.length > 0 && setShowDropdown(true)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                onFocus={handleInputFocus}
+                className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
               />
-              {searchLoading && (
-                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
-              )}
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                {!initialLoadDone && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
 
-              {/* Search Results Dropdown */}
-              {showDropdown && clients.length > 0 && (
+              {/* Dropdown with all clients or filtered results */}
+              {showDropdown && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {clients.map((client) => {
-                    const clientAddress = client.address || {};
-                    const hasAddress = clientAddress.city || clientAddress.state || clientAddress.country;
-                    return (
-                      <button
-                        key={client._id}
-                        type="button"
-                        onClick={() => handleSelectClient(client)}
-                        className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                            <User className="w-4 h-4 text-gray-500" />
+                  {clients.length > 0 ? (
+                    clients.map((client) => {
+                      const clientAddress = client.address || {};
+                      const hasAddress = clientAddress.city || clientAddress.state || clientAddress.country;
+                      return (
+                        <button
+                          key={client._id}
+                          type="button"
+                          onClick={() => handleSelectClient(client)}
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                              <User className="w-4 h-4 text-gray-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900">{client.customerName}</p>
+                              <p className="text-sm text-gray-500 truncate">{client.businessName} • {client.email}</p>
+                              {hasAddress && (
+                                <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                                  <MapPin className="w-3 h-3" />
+                                  {[clientAddress.city, clientAddress.state, clientAddress.country].filter(Boolean).join(', ')}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900">{client.customerName}</p>
-                            <p className="text-sm text-gray-500 truncate">{client.businessName} • {client.email}</p>
-                            {hasAddress && (
-                              <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                                <MapPin className="w-3 h-3" />
-                                {[clientAddress.city, clientAddress.state, clientAddress.country].filter(Boolean).join(', ')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {showDropdown && clientSearch.length >= 2 && !searchLoading && clients.length === 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-                  No clients found. Enter details manually below.
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 text-center text-gray-500">
+                      {clientSearch.length >= 2 ? 'No clients found.' : 'No clients available.'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

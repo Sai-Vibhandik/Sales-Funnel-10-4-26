@@ -91,10 +91,6 @@ exports.getClient = async (req, res) => {
 // @access  Private (Admin only)
 exports.createClient = async (req, res) => {
   try {
-    console.log('=== CREATE CLIENT ===');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('Address in request body:', req.body.address);
-
     // Check if client with same email already exists in organization
     const existingClient = await Client.findOne({
       email: req.body.email.toLowerCase(),
@@ -113,9 +109,6 @@ exports.createClient = async (req, res) => {
       organizationId: req.user.currentOrganization,
       createdBy: req.user._id
     });
-
-    console.log('Client created:', JSON.stringify(client, null, 2));
-    console.log('Client address:', client.address);
 
     res.status(201).json({
       success: true,

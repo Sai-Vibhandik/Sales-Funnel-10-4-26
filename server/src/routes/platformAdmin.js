@@ -280,7 +280,7 @@ router.get('/users', async (req, res) => {
       // Get memberships and populate
       const memberships = await Membership.find(membershipQuery)
         .populate('userId', 'name email role isActive createdAt')
-        .populate('organizationId', 'name slug plan isActive')
+        .populate('organizationId', 'name slug plan planName isActive')
         .sort({ 'organizationId.name': 1, createdAt: 1 });
 
       // Build grouped structure

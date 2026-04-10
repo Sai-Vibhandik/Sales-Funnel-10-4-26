@@ -12,7 +12,7 @@ export default function Layout() {
       <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
       <div
         className={cn(
-          'transition-all duration-300',
+          'transition-[margin] duration-300',
           sidebarCollapsed ? 'ml-20' : 'ml-64'
         )}
       >

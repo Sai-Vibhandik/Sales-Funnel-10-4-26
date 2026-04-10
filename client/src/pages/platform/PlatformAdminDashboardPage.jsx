@@ -811,12 +811,7 @@ function UsersTab() {
       }
 
       setGroupedUsers(data);
-
-      const expanded = {};
-      data.forEach(group => {
-        expanded[group.organization._id] = true;
-      });
-      setExpandedOrgs(expanded);
+      // Keep dropdowns closed by default - don't auto-expand
     } catch (error) {
       toast.error('Failed to load users');
     } finally {

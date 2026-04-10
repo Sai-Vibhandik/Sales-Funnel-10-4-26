@@ -808,6 +808,9 @@ const getUsage = async (req, res) => {
       });
     }
 
+    // Update usage statistics to ensure accurate counts
+    await organization.updateUsage();
+
     const plan = await Plan.findOne({ slug: organization.plan });
 
     // Calculate usage percentages

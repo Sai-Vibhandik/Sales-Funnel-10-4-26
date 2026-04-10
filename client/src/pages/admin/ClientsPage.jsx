@@ -17,11 +17,12 @@ const clientSchema = z.object({
   website: z.string().optional().or(z.literal('')),
   description: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
-  'address.street': z.string().optional().or(z.literal('')),
-  'address.city': z.string().optional().or(z.literal('')),
-  'address.state': z.string().optional().or(z.literal('')),
-  'address.country': z.string().optional().or(z.literal('')),
-  'address.zipCode': z.string().optional().or(z.literal('')),
+  // Use flat field names for address
+  street: z.string().optional().or(z.literal('')),
+  city: z.string().optional().or(z.literal('')),
+  state: z.string().optional().or(z.literal('')),
+  country: z.string().optional().or(z.literal('')),
+  zipCode: z.string().optional().or(z.literal('')),
 });
 
 export default function ClientsPage() {
@@ -49,11 +50,11 @@ export default function ClientsPage() {
       website: '',
       description: '',
       notes: '',
-      'address.street': '',
-      'address.city': '',
-      'address.state': '',
-      'address.country': '',
-      'address.zipCode': '',
+      street: '',
+      city: '',
+      state: '',
+      country: '',
+      zipCode: '',
     },
   });
 
@@ -102,11 +103,11 @@ export default function ClientsPage() {
       website: '',
       description: '',
       notes: '',
-      'address.street': '',
-      'address.city': '',
-      'address.state': '',
-      'address.country': '',
-      'address.zipCode': '',
+      street: '',
+      city: '',
+      state: '',
+      country: '',
+      zipCode: '',
     });
     setShowModal(true);
   };
@@ -123,40 +124,28 @@ export default function ClientsPage() {
       website: client.website || '',
       description: client.description || '',
       notes: client.notes || '',
-      'address.street': client.address?.street || '',
-      'address.city': client.address?.city || '',
-      'address.state': client.address?.state || '',
-      'address.country': client.address?.country || '',
-      'address.zipCode': client.address?.zipCode || '',
+      street: client.address?.street || '',
+      city: client.address?.city || '',
+      state: client.address?.state || '',
+      country: client.address?.country || '',
+      zipCode: client.address?.zipCode || '',
     });
     setShowModal(true);
   };
 
   const onSubmit = async (data) => {
     try {
-      // Build address object only with non-empty values
+      // Build address object from flat field names
       const addressFields = {
-        street: data['address.street'],
-        city: data['address.city'],
-        state: data['address.state'],
-        country: data['address.country'],
-        zipCode: data['address.zipCode'],
+        street: data.street,
+        city: data.city,
+        state: data.state,
+        country: data.country,
+        zipCode: data.zipCode,
       };
 
-      console.log('Raw form data:', data);
-      console.log('Address fields:', addressFields);
-
-      // Filter out empty/undefined values and only include address if at least one field has a value
+      // Check if any address field has data
       const hasAddressData = Object.values(addressFields).some(val => val && val.trim() !== '');
-      const address = hasAddressData
-        ? {
-            street: addressFields.street?.trim() || '',
-            city: addressFields.city?.trim() || '',
-            state: addressFields.state?.trim() || '',
-            country: addressFields.country?.trim() || '',
-            zipCode: addressFields.zipCode?.trim() || '',
-          }
-        : undefined;
 
       const formattedData = {
         customerName: data.customerName,
@@ -171,11 +160,15 @@ export default function ClientsPage() {
       };
 
       // Only add address if there's data
-      if (address) {
-        formattedData.address = address;
+      if (hasAddressData) {
+        formattedData.address = {
+          street: addressFields.street?.trim() || '',
+          city: addressFields.city?.trim() || '',
+          state: addressFields.state?.trim() || '',
+          country: addressFields.country?.trim() || '',
+          zipCode: addressFields.zipCode?.trim() || '',
+        };
       }
-
-      console.log('Formatted data being sent:', formattedData);
 
       if (editingClient) {
         await clientService.updateClient(editingClient._id, formattedData);
@@ -424,35 +417,35 @@ export default function ClientsPage() {
               <Input
                 label="Street"
                 placeholder="123 Main Street"
-                error={errors['address.street']?.message}
-                {...register('address.street')}
+                error={errors.street?.message}
+                {...register('street')}
               />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <Input
                   label="City"
                   placeholder="New York"
-                  error={errors['address.city']?.message}
-                  {...register('address.city')}
+                  error={errors.city?.message}
+                  {...register('city')}
                 />
                 <Input
                   label="State"
                   placeholder="NY"
-                  error={errors['address.state']?.message}
-                  {...register('address.state')}
+                  error={errors.state?.message}
+                  {...register('state')}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <Input
                   label="Country"
                   placeholder="United States"
-                  error={errors['address.country']?.message}
-                  {...register('address.country')}
+                  error={errors.country?.message}
+                  {...register('country')}
                 />
                 <Input
                   label="Zip Code"
                   placeholder="10001"
-                  error={errors['address.zipCode']?.message}
-                  {...register('address.zipCode')}
+                  error={errors.zipCode?.message}
+                  {...register('zipCode')}
                 />
               </div>
             </div>
