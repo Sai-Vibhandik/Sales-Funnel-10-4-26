@@ -334,7 +334,7 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
               </div>
             </div>
 
-            <Input
+            {/* <Input
               label="Hook"
               placeholder="What's the main hook that grabs attention?"
               value={formData.hook}
@@ -385,7 +385,7 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
+            </div> */}
 
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={resetForm}>
@@ -425,11 +425,11 @@ export default function LandingPagesSection({ projectId, landingPages = [], onSa
                     <p className="text-sm text-gray-500">
                       {FUNNEL_TYPES.find(ft => ft.id === lp.funnelType)?.label || lp.funnelType} • {PLATFORMS.find(p => p.id === lp.platform)?.label || lp.platform}
                     </p>
-                    {lp.hook && (
+                    {/* {lp.hook && (
                       <p className="text-sm text-gray-400 mt-1 truncate max-w-md">
                         Hook: {lp.hook}
                       </p>
-                    )}
+                    )} */}
                     {/* Show assigned team members */}
                     <div className="flex items-center gap-4 mt-2">
                       <span className="text-xs flex items-center gap-1 text-purple-600">

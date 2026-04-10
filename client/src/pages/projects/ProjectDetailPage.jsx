@@ -26,6 +26,7 @@ import {
   Archive,
   CheckCircle2,
   MapPin,
+  Plus,
 } from 'lucide-react';
 import { formatDate, getStageName, STAGE_ORDER } from '@/lib/utils';
 import { PROJECT_STATUS_CONFIG, PROJECT_STATUS_VALUES, getProjectStatusConfig } from '@/constants/taskStatuses';
@@ -336,7 +337,7 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {(isAdmin || isPerformanceMarketer) && (
+          {isAdmin && (
             <Button
               variant="secondary"
               onClick={() => navigate(`/dashboard/projects/${id}/assign-team`)}
@@ -434,8 +435,8 @@ export default function ProjectDetailPage() {
         </CardBody>
       </Card>
 
-      {/* Team Assignment - Admin and Performance Marketer View */}
-      {(isAdmin || isPerformanceMarketer) && (
+      {/* Team Assignment - Admin Only */}
+      {isAdmin && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -511,6 +512,8 @@ export default function ProjectDetailPage() {
               const Icon = STAGE_ICONS[stage.key] || CheckCircle;
               const isAccessible = stage.isAccessible;
               const isCompleted = stage.isCompleted;
+              // Stages that allow adding more items after completion
+              const canAddMore = stage.key === 'landingPage' || stage.key === 'creativeStrategy';
 
               return (
                 <Card
@@ -567,6 +570,20 @@ export default function ProjectDetailPage() {
                             }}
                           >
                             Continue
+                          </Button>
+                        )}
+                        {isCompleted && canAddMore && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`${STAGE_PATHS[stage.key]}?projectId=${id}`);
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add More
                           </Button>
                         )}
                       </div>

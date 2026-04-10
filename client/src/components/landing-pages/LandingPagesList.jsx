@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardBody, Button, Spinner } from '@/components/ui';
-import { Plus, FileText, Edit, Trash2, ArrowRight, Users, Code, Palette, AlertCircle } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, ArrowRight, Code, Palette, AlertCircle } from 'lucide-react';
 import { projectService } from '@/services/api';
 
 const FUNNEL_TYPES = {
@@ -33,7 +33,6 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  // Extract team members from project for display
   const getDesignerName = (designerId) => {
     if (!designerId || !project?.assignedTeam) return 'Not assigned';
     const designers = project.assignedTeam.uiUxDesigners || [];
@@ -77,7 +76,6 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
         name: `Landing Page ${(landingPages?.length || 0) + 1}`
       });
       toast.success('Landing page created');
-      // Navigate to edit the new landing page
       const newLandingPageId = response.data._id;
       navigate(`/dashboard/landing-page-strategy?projectId=${projectId}&landingPageId=${newLandingPageId}`);
     } catch (error) {
@@ -118,23 +116,13 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
       return;
     }
 
-    // Team assignments are optional - Performance Marketer can add them later
-    // const unassignedLPs = landingPages.filter(lp => !lp.assignedDesigner || !lp.assignedDeveloper);
-    // if (unassignedLPs.length > 0) {
-    //   toast.error(`${unassignedLPs.length} landing page(s) missing team assignments. Please edit and assign designer/developer.`);
-    //   return;
-    // }
-
     try {
       setCompleting(true);
-      // Mark the landing page stage as complete
       await projectService.completeLandingPageStage(projectId);
       toast.success('Landing page stage completed!');
-      // Navigate to creative strategy
       navigate(`/dashboard/creative-strategy?projectId=${projectId}`);
     } catch (error) {
       console.error('Error completing landing page stage:', error);
-      // Even if completion fails, try to navigate if there are landing pages
       navigate(`/dashboard/creative-strategy?projectId=${projectId}`);
     } finally {
       setCompleting(false);
@@ -198,20 +186,13 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
                       </span>
                     </div>
 
-                    <div className="space-y-2 mb-4">
-                      {lp.hook && (
-                        <div className="text-sm">
-                          <span className="text-gray-500">Hook:</span>{' '}
-                          <span className="text-gray-700 truncate">{lp.hook.substring(0, 50)}...</span>
-                        </div>
-                      )}
-                      {lp.platform && (
-                        <div className="text-sm">
-                          <span className="text-gray-500">Platform:</span>{' '}
-                          <span className="text-gray-700">{PLATFORMS[lp.platform] || lp.platform}</span>
-                        </div>
-                      )}
-                    </div>
+                    {/* Platform only (Hook removed) */}
+                    {lp.platform && (
+                      <div className="text-sm mb-3">
+                        <span className="text-gray-500">Platform:</span>{' '}
+                        <span className="text-gray-700">{PLATFORMS[lp.platform] || lp.platform}</span>
+                      </div>
+                    )}
 
                     {/* Team Assignments */}
                     <div className="flex items-center gap-3 mb-3">
@@ -261,7 +242,6 @@ export default function LandingPagesList({ projectId, readOnly = false }) {
             })}
           </div>
 
-          {/* Continue Button - Admin Only */}
           {!readOnly && (
             <div className="flex justify-end pt-4 border-t">
               <Button onClick={handleContinue} loading={completing}>

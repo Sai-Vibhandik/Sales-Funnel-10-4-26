@@ -52,8 +52,8 @@ router.route('/:id')
 
 router.route('/:id/progress').get(getProjectProgress);
 
-// Team assignment (Admin and Performance Marketer)
-router.put('/:id/assign-team', authorize('admin', 'performance_marketer'), assignTeam);
+// Team assignment (Admin only)
+router.put('/:id/assign-team', authorize('admin'), assignTeam);
 
 // Project activation (Admin and Performance Marketer)
 router.put('/:id/activate', authorize('admin', 'performance_marketer'), toggleProjectActivation);

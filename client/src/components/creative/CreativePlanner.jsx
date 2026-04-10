@@ -114,6 +114,9 @@ const ROLE_TO_TEAM_FIELD = {
   'video_editor': { arrayField: 'videoEditors', legacyField: 'videoEditor' }
 };
 
+// LocalStorage key for auto-saving creative strategy data
+const getStorageKey = (projectId) => `creative_strategy_draft_${projectId}`;
+
 export default function CreativePlanner({
   projectId,
   initialData,
@@ -128,10 +131,82 @@ export default function CreativePlanner({
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [expandedCards, setExpandedCards] = useState({});
   const [allSubCategories, setAllSubCategories] = useState([]);
+  const [lastAutoSaved, setLastAutoSaved] = useState(null);
 
   // ─── FIX: Track the "last saved snapshot" so we can diff on save
   // and know which assignments are NEW (need task creation) vs unchanged.
   const lastSavedPlanRef = useRef([]);
+
+  // ─── AUTO-SAVE: Track if we've loaded server data to prevent draft overwriting
+  const hasLoadedFromServer = useRef(false);
+
+  // ─── AUTO-SAVE: Load draft from localStorage on mount if no server data
+  useEffect(() => {
+    // Only load draft if:
+    // 1. We haven't already loaded from server
+    // 2. Server doesn't have creative plan data
+    // 3. Project exists and not completed
+    const serverHasData = initialData?.creativePlan && initialData.creativePlan.length > 0;
+
+    if (!hasLoadedFromServer.current && !serverHasData && projectId && !isCompleted) {
+      const storageKey = getStorageKey(projectId);
+      try {
+        const savedDraft = localStorage.getItem(storageKey);
+        if (savedDraft) {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed.creativePlan && parsed.creativePlan.length > 0) {
+            console.log('Restoring creative strategy draft from localStorage');
+            setCreativePlan(parsed.creativePlan);
+            setAdditionalNotes(parsed.additionalNotes || '');
+
+            // Expand all cards
+            const expanded = {};
+            parsed.creativePlan.forEach(item => {
+              expanded[item._id] = true;
+            });
+            setExpandedCards(expanded);
+
+            // Update the last saved ref
+            lastSavedPlanRef.current = parsed.creativePlan.map(r => ({
+              _id: r._id,
+              assignedTeamMembers: [...(r.assignedTeamMembers || [])],
+              contentWriter: r.contentWriter || '',
+              assignedRole: r.assignedRole || ''
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading draft from localStorage:', error);
+      }
+    }
+  }, [projectId, initialData, isCompleted]);
+
+  // ─── AUTO-SAVE: Save draft to localStorage whenever form data changes
+  useEffect(() => {
+    if (projectId && !isCompleted && !readOnly && creativePlan.length > 0) {
+      const storageKey = getStorageKey(projectId);
+      try {
+        const draft = {
+          creativePlan,
+          additionalNotes,
+          savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(storageKey, JSON.stringify(draft));
+        setLastAutoSaved(new Date());
+      } catch (error) {
+        console.error('Error saving draft to localStorage:', error);
+      }
+    }
+  }, [creativePlan, additionalNotes, projectId, isCompleted, readOnly]);
+
+  // ─── AUTO-SAVE: Clear draft from localStorage when form is completed
+  const clearDraft = () => {
+    if (projectId) {
+      const storageKey = getStorageKey(projectId);
+      localStorage.removeItem(storageKey);
+      console.log('Cleared creative strategy draft from localStorage');
+    }
+  };
 
   // Fetch all subcategories on mount
   useEffect(() => {
@@ -158,7 +233,14 @@ export default function CreativePlanner({
   // Load initial data
   useEffect(() => {
     if (initialData) {
+      // Mark that we've received server data
+      hasLoadedFromServer.current = true;
+
+      // Only clear draft if server has actual data
       if (initialData.creativePlan && initialData.creativePlan.length > 0) {
+        // Server has data - clear any draft and load from server
+        clearDraft();
+
         const migratedPlan = initialData.creativePlan.map(item => ({
           // ─── FIX: Preserve the real MongoDB _id as-is; only fall back to
           // a generated temp ID if there is genuinely no _id on the item.
@@ -193,6 +275,7 @@ export default function CreativePlanner({
         });
         setExpandedCards(expanded);
       }
+      // If server has no creative plan, keep the draft loaded from localStorage
 
       if (initialData.additionalNotes) {
         setAdditionalNotes(initialData.additionalNotes);
@@ -521,6 +604,11 @@ export default function CreativePlanner({
         contentWriter: r.contentWriter || '',
         assignedRole: r.assignedRole || ''
       }));
+
+      // ─── AUTO-SAVE: Clear draft from localStorage when completed
+      if (markComplete) {
+        clearDraft();
+      }
 
       toast.success(markComplete ? 'Creative strategy completed!' : 'Progress saved!');
     } catch (error) {
@@ -957,21 +1045,30 @@ export default function CreativePlanner({
 
       {/* Actions */}
       {!readOnly && (
-        <div className="flex justify-end gap-4">
-          <Button
-            variant="outline"
-            onClick={() => handleSave(false)}
-            disabled={saving}
-          >
-            {saving ? 'Saving...' : 'Save Progress'}
-          </Button>
-          <Button
-            onClick={() => handleSave(true)}
-            disabled={saving || isCompleted}
-          >
-            <CheckCircle className="w-4 h-4 mr-2" />
-            {saving ? 'Saving...' : 'Complete & Continue'}
-          </Button>
+        <div className="flex items-center justify-between gap-4">
+          {/* Auto-save indicator */}
+          {lastAutoSaved && creativePlan.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span>Auto-saved {Math.floor((Date.now() - lastAutoSaved.getTime()) / 1000) < 60 ? 'just now' : `${Math.floor((Date.now() - lastAutoSaved.getTime()) / 60000)} min ago`}</span>
+            </div>
+          )}
+          <div className="flex gap-4 ml-auto">
+            <Button
+              variant="outline"
+              onClick={() => handleSave(false)}
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Save Progress'}
+            </Button>
+            <Button
+              onClick={() => handleSave(true)}
+              disabled={saving || isCompleted}
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {saving ? 'Saving...' : 'Complete & Continue'}
+            </Button>
+          </div>
         </div>
       )}
     </div>

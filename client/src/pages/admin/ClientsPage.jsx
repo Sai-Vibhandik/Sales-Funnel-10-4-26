@@ -134,24 +134,48 @@ export default function ClientsPage() {
 
   const onSubmit = async (data) => {
     try {
+      // Build address object only with non-empty values
+      const addressFields = {
+        street: data['address.street'],
+        city: data['address.city'],
+        state: data['address.state'],
+        country: data['address.country'],
+        zipCode: data['address.zipCode'],
+      };
+
+      console.log('Raw form data:', data);
+      console.log('Address fields:', addressFields);
+
+      // Filter out empty/undefined values and only include address if at least one field has a value
+      const hasAddressData = Object.values(addressFields).some(val => val && val.trim() !== '');
+      const address = hasAddressData
+        ? {
+            street: addressFields.street?.trim() || '',
+            city: addressFields.city?.trim() || '',
+            state: addressFields.state?.trim() || '',
+            country: addressFields.country?.trim() || '',
+            zipCode: addressFields.zipCode?.trim() || '',
+          }
+        : undefined;
+
       const formattedData = {
         customerName: data.customerName,
         businessName: data.businessName,
         email: data.email,
         mobile: data.mobile,
-        alternatePhone: data.alternatePhone || undefined,
-        industry: data.industry || undefined,
-        website: data.website || undefined,
-        description: data.description || undefined,
-        notes: data.notes || undefined,
-        address: {
-          street: data['address.street'] || undefined,
-          city: data['address.city'] || undefined,
-          state: data['address.state'] || undefined,
-          country: data['address.country'] || undefined,
-          zipCode: data['address.zipCode'] || undefined,
-        },
+        alternatePhone: data.alternatePhone?.trim() || undefined,
+        industry: data.industry?.trim() || undefined,
+        website: data.website?.trim() || undefined,
+        description: data.description?.trim() || undefined,
+        notes: data.notes?.trim() || undefined,
       };
+
+      // Only add address if there's data
+      if (address) {
+        formattedData.address = address;
+      }
+
+      console.log('Formatted data being sent:', formattedData);
 
       if (editingClient) {
         await clientService.updateClient(editingClient._id, formattedData);
