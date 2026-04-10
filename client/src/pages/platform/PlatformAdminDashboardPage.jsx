@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { platformAdminService } from '@/services/platformAdmin';
-import { Card, CardBody, Spinner, Button, Badge } from '@/components/ui';
+import { Card, CardBody, Spinner, Button, Badge, Modal } from '@/components/ui';
 import {
   Building2,
   Users,
@@ -604,166 +604,153 @@ function OrganizationsTab() {
       )}
 
       {/* Suspend Modal */}
-      {suspendModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-md w-full">
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Suspend Organization</h3>
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to suspend <strong>{suspendModal.name}</strong>?
-              </p>
-              <textarea
-                placeholder="Reason for suspension..."
-                value={suspendReason}
-                onChange={(e) => setSuspendReason(e.target.value)}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
-                rows={3}
-              />
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setSuspendModal(null); setSuspendReason(''); }}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={() => handleSuspend(suspendModal, true)}>
-                  Suspend
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
+      <Modal isOpen={!!suspendModal} onClose={() => { setSuspendModal(null); setSuspendReason(''); }} size="md">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Suspend Organization</h3>
+          <p className="text-gray-600 mb-4">
+            Are you sure you want to suspend <strong>{suspendModal?.name}</strong>?
+          </p>
+          <textarea
+            placeholder="Reason for suspension..."
+            value={suspendReason}
+            onChange={(e) => setSuspendReason(e.target.value)}
+            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
+            rows={3}
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => { setSuspendModal(null); setSuspendReason(''); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => handleSuspend(suspendModal, true)}>
+              Suspend
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
 
       {/* --- UPDATED Detail Modal with Members & Roles --- */}
-      {selectedOrg && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => { setSelectedOrg(null); setOrgMembers([]); }}
-        >
-          <Card
-            className="max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <CardBody className="p-6">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold text-lg">
-                    {selectedOrg.name?.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900">{selectedOrg.name}</h3>
-                    <p className="text-sm text-gray-500">{selectedOrg.owner?.email}</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedOrg(null); setOrgMembers([]); }}>
-                  <X size={18} />
-                </Button>
+      {/* Organization Detail Modal */}
+      <Modal isOpen={!!selectedOrg} onClose={() => { setSelectedOrg(null); setOrgMembers([]); }} size="2xl" showCloseButton={false}>
+        <div className="p-6">
+          {/* Modal Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold text-lg">
+                {selectedOrg?.name?.charAt(0).toUpperCase()}
               </div>
-
-              {/* Org Info Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="p-3 rounded-lg bg-gray-50">
-                  <p className="text-xs text-gray-500 mb-1">Plan</p>
-                  <Badge className={getPlanColor(getPlanName(selectedOrg))}>
-                    {getPlanName(selectedOrg)}
-                  </Badge>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50">
-                  <p className="text-xs text-gray-500 mb-1">Status</p>
-                  <Badge className={selectedOrg.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                    {selectedOrg.isActive !== false ? 'Active' : 'Suspended'}
-                  </Badge>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50">
-                  <p className="text-xs text-gray-500 mb-1">Owner</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {selectedOrg.owner?.name || '—'}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50">
-                  <p className="text-xs text-gray-500 mb-1">Created</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {new Date(selectedOrg.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* --- NEW: Members & Roles Section --- */}
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Users size={16} className="text-gray-500" />
-                    <h4 className="text-sm font-semibold text-gray-900">
-                      Members & Roles
-                    </h4>
-                    {!membersLoading && (
-                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        {orgMembers.length}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <h3 className="text-xl font-semibold text-gray-900">{selectedOrg?.name}</h3>
+                <p className="text-sm text-gray-500">{selectedOrg?.owner?.email}</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedOrg(null); setOrgMembers([]); }}>
+              <X size={18} />
+            </Button>
+          </div>
 
-                {membersLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner size="sm" />
-                    <span className="ml-2 text-sm text-gray-500">Loading members...</span>
-                  </div>
-                ) : orgMembers.length === 0 ? (
-                  <div className="py-8 text-center rounded-lg bg-gray-50 border border-dashed border-gray-200">
-                    <Users size={28} className="mx-auto text-gray-300 mb-2" />
-                    <p className="text-sm text-gray-400">No members found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {orgMembers.map((member) => (
-                      <div
-                        key={member._id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Avatar */}
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                            {member.name?.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {member.name}
-                              </p>
-                              {!member.isActive && (
-                                <Badge className="bg-red-100 text-red-600 text-xs py-0">
-                                  Inactive
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-500 truncate">{member.email}</p>
-                          </div>
-                        </div>
+          {/* Org Info Grid */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="p-3 rounded-lg bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Plan</p>
+              <Badge className={getPlanColor(getPlanName(selectedOrg))}>
+                {getPlanName(selectedOrg)}
+              </Badge>
+            </div>
+            <div className="p-3 rounded-lg bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Status</p>
+              <Badge className={selectedOrg?.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                {selectedOrg?.isActive !== false ? 'Active' : 'Suspended'}
+              </Badge>
+            </div>
+            <div className="p-3 rounded-lg bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Owner</p>
+              <p className="text-sm font-medium text-gray-900">
+                {selectedOrg?.owner?.name || '—'}
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Created</p>
+              <p className="text-sm font-medium text-gray-900">
+                {selectedOrg?.createdAt ? new Date(selectedOrg.createdAt).toLocaleDateString() : '—'}
+              </p>
+            </div>
+          </div>
 
-                        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                          {/* Role Badge */}
-                          <Badge className={cn(
-                            'text-xs capitalize',
-                            ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'
-                          )}>
-                            {ROLE_DISPLAY_NAMES[member.role] || member.role?.replace(/_/g, ' ')}
-                          </Badge>
-                          {/* Join date */}
-                          {member.joinedAt && (
-                            <span className="text-xs text-gray-400 hidden sm:block">
-                              {new Date(member.joinedAt).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+          {/* Members & Roles Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users size={16} className="text-gray-500" />
+                <h4 className="text-sm font-semibold text-gray-900">
+                  Members & Roles
+                </h4>
+                {!membersLoading && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {orgMembers.length}
+                  </span>
                 )}
               </div>
-            </CardBody>
-          </Card>
+            </div>
+
+            {membersLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="sm" />
+                <span className="ml-2 text-sm text-gray-500">Loading members...</span>
+              </div>
+            ) : orgMembers.length === 0 ? (
+              <div className="py-8 text-center rounded-lg bg-gray-50 border border-dashed border-gray-200">
+                <Users size={28} className="mx-auto text-gray-300 mb-2" />
+                <p className="text-sm text-gray-400">No members found</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {orgMembers.map((member) => (
+                  <div
+                    key={member._id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Avatar */}
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                        {member.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {member.name}
+                          </p>
+                          {!member.isActive && (
+                            <Badge className="bg-red-100 text-red-600 text-xs py-0">
+                              Inactive
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{member.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                      {/* Role Badge */}
+                      <Badge className={cn(
+                        'text-xs capitalize',
+                        ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'
+                      )}>
+                        {ROLE_DISPLAY_NAMES[member.role] || member.role?.replace(/_/g, ' ')}
+                      </Badge>
+                      {/* Join date */}
+                      {member.joinedAt && (
+                        <span className="text-xs text-gray-400 hidden sm:block">
+                          {new Date(member.joinedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
@@ -1053,51 +1040,47 @@ function UsersTab() {
       )}
 
       {/* Role Change Modal */}
-      {roleModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-md w-full">
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Change User Role</h3>
-              <p className="text-gray-600 mb-4">
-                Change role for <strong>{roleModal.name}</strong>
+      <Modal isOpen={!!roleModal} onClose={() => { setRoleModal(null); setSelectedRole(''); }} size="md">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Change User Role</h3>
+          <p className="text-gray-600 mb-4">
+            Change role for <strong>{roleModal?.name}</strong>
+          </p>
+          <p className="text-sm text-gray-500 mb-4">
+            Email: {roleModal?.email}
+          </p>
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
+          >
+            <option value="admin">Admin</option>
+            <option value="performance_marketer">Performance Marketer</option>
+            <option value="content_writer">Content Writer</option>
+            <option value="graphic_designer">Graphic Designer</option>
+            <option value="video_editor">Video Editor</option>
+            <option value="ui_ux_designer">UI/UX Designer</option>
+            <option value="developer">Developer</option>
+            <option value="tester">Tester</option>
+          </select>
+          {selectedRole === 'platform_admin' && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+              <p className="text-sm text-yellow-800">
+                <AlertTriangle size={16} className="inline mr-1" />
+                Platform admin has full access to all organizations.
               </p>
-              <p className="text-sm text-gray-500 mb-4">
-                Email: {roleModal.email}
-              </p>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
-              >
-                <option value="admin">Admin</option>
-                <option value="performance_marketer">Performance Marketer</option>
-                <option value="content_writer">Content Writer</option>
-                <option value="graphic_designer">Graphic Designer</option>
-                <option value="video_editor">Video Editor</option>
-                <option value="ui_ux_designer">UI/UX Designer</option>
-                <option value="developer">Developer</option>
-                <option value="tester">Tester</option>
-              </select>
-              {selectedRole === 'platform_admin' && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-                  <p className="text-sm text-yellow-800">
-                    <AlertTriangle size={16} className="inline mr-1" />
-                    Platform admin has full access to all organizations.
-                  </p>
-                </div>
-              )}
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setRoleModal(null); setSelectedRole(''); }}>
-                  Cancel
-                </Button>
-                <Button onClick={handleRoleChange}>
-                  Update Role
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => { setRoleModal(null); setSelectedRole(''); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleRoleChange}>
+              Update Role
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
@@ -1259,125 +1242,122 @@ function PlansTab() {
       )}
 
       {/* Edit Modal */}
-      {editModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {editModal === 'new' ? 'Create Plan' : 'Edit Plan'}
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Plan Name *</label>
-                  <input
-                    type="text"
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full p-2 border border-gray-200 rounded-lg"
-                    placeholder="e.g., Starter, Growth, Pro"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Price (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.monthlyPrice || 0}
-                      onChange={(e) => setFormData({ ...formData, monthlyPrice: Math.max(0, parseInt(e.target.value) || 0) })}
-                      className="w-full p-2 border border-gray-200 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Yearly Price (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.yearlyPrice || 0}
-                      onChange={(e) => setFormData({ ...formData, yearlyPrice: Math.max(0, parseInt(e.target.value) || 0) })}
-                      className="w-full p-2 border border-gray-200 rounded-lg"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Users</label>
-                    <input
-                      type="number"
-                      min="-1"
-                      value={formData.limits?.maxUsers || 0}
-                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxUsers: parseInt(e.target.value) || 0 } })}
-                      className="w-full p-2 border border-gray-200 rounded-lg"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Enter -1 for unlimited</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Projects</label>
-                    <input
-                      type="number"
-                      min="-1"
-                      value={formData.limits?.maxProjects || 0}
-                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxProjects: parseInt(e.target.value) || 0 } })}
-                      className="w-full p-2 border border-gray-200 rounded-lg"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Enter -1 for unlimited</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Landing Pages</label>
-                    <input
-                      type="number"
-                      min="-1"
-                      value={formData.limits?.maxLandingPages || 0}
-                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxLandingPages: parseInt(e.target.value) || 0 } })}
-                      className="w-full p-2 border border-gray-200 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">AI Calls/Month</label>
-                    <input
-                      type="number"
-                      min="-1"
-                      value={formData.limits?.aiCallsPerMonth || 0}
-                      onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, aiCallsPerMonth: parseInt(e.target.value) || 0 } })}
-                      className="w-full p-2 border border-gray-200 rounded-lg"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.isActive !== false}
-                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700">Active</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.isPublic !== false}
-                      onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700">Public</span>
-                  </label>
-                </div>
+      {/* Edit Plan Modal */}
+      <Modal isOpen={!!editModal} onClose={() => { setEditModal(null); setFormData({}); }} size="lg">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {editModal === 'new' ? 'Create Plan' : 'Edit Plan'}
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Plan Name *</label>
+              <input
+                type="text"
+                value={formData.name || ''}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full p-2 border border-gray-200 rounded-lg"
+                placeholder="e.g., Starter, Growth, Pro"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Price (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.monthlyPrice || 0}
+                  onChange={(e) => setFormData({ ...formData, monthlyPrice: Math.max(0, parseInt(e.target.value) || 0) })}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                />
               </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave}>
-                  {editModal === 'new' ? 'Create Plan' : 'Save Changes'}
-                </Button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Yearly Price (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.yearlyPrice || 0}
+                  onChange={(e) => setFormData({ ...formData, yearlyPrice: Math.max(0, parseInt(e.target.value) || 0) })}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                />
               </div>
-            </CardBody>
-          </Card>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Max Users</label>
+                <input
+                  type="number"
+                  min="-1"
+                  value={formData.limits?.maxUsers || 0}
+                  onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxUsers: parseInt(e.target.value) || 0 } })}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter -1 for unlimited</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Max Projects</label>
+                <input
+                  type="number"
+                  min="-1"
+                  value={formData.limits?.maxProjects || 0}
+                  onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxProjects: parseInt(e.target.value) || 0 } })}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter -1 for unlimited</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Max Landing Pages</label>
+                <input
+                  type="number"
+                  min="-1"
+                  value={formData.limits?.maxLandingPages || 0}
+                  onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, maxLandingPages: parseInt(e.target.value) || 0 } })}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">AI Calls/Month</label>
+                <input
+                  type="number"
+                  min="-1"
+                  value={formData.limits?.aiCallsPerMonth || 0}
+                  onChange={(e) => setFormData({ ...formData, limits: { ...formData.limits, aiCallsPerMonth: parseInt(e.target.value) || 0 } })}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.isActive !== false}
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  className="rounded"
+                />
+                <span className="text-sm text-gray-700">Active</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.isPublic !== false}
+                  onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+                  className="rounded"
+                />
+                <span className="text-sm text-gray-700">Public</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>
+              {editModal === 'new' ? 'Create Plan' : 'Save Changes'}
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
@@ -1825,129 +1805,121 @@ function PromptsTab() {
       )}
 
       {/* Create/Edit Modal */}
-      {editModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {editModal === 'new' ? 'Create System Prompt' : 'Edit Prompt'}
-                </h3>
-                <Button variant="ghost" size="sm" onClick={() => { setEditModal(null); setFormData({}); }}>
-                  <X size={18} />
-                </Button>
+      <Modal isOpen={!!editModal} onClose={() => { setEditModal(null); setFormData({}); }} size="2xl" showCloseButton={false}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {editModal === 'new' ? 'Create System Prompt' : 'Edit Prompt'}
+            </h3>
+            <Button variant="ghost" size="sm" onClick={() => { setEditModal(null); setFormData({}); }}>
+              <X size={18} />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <input type="text" value={formData.title || ''} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Enter prompt title" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                <select value={formData.role || 'content_writer'} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  {roleOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                  <input type="text" value={formData.title || ''} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Enter prompt title" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
-                    <select value={formData.role || 'content_writer'} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                      {roleOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Framework {formData.role === 'content_writer' && '*'}</label>
-                    <select value={formData.frameworkType || ''} onChange={(e) => setFormData({ ...formData, frameworkType: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                      <option value="">Select Framework</option>
-                      {frameworkOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <select value={formData.category || 'general'} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                      <option value="general">General</option>
-                      <option value="instagram">Instagram</option>
-                      <option value="facebook">Facebook</option>
-                      <option value="youtube">YouTube</option>
-                      <option value="linkedin">LinkedIn</option>
-                      <option value="landing_page">Landing Page</option>
-                      <option value="email">Email</option>
-                      <option value="video">Video</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
-                    <select value={formData.platform || 'all'} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                      <option value="all">All Platforms</option>
-                      <option value="instagram">Instagram</option>
-                      <option value="facebook">Facebook</option>
-                      <option value="youtube">YouTube</option>
-                      <option value="linkedin">LinkedIn</option>
-                      <option value="google_ads">Google Ads</option>
-                      <option value="landing_page">Landing Page</option>
-                      <option value="email">Email</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prompt Content *</label>
-                  <textarea value={formData.content || ''} onChange={(e) => setFormData({ ...formData, content: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm" rows={10} placeholder="Enter the prompt content..." />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input type="text" value={formData.description || ''} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Brief description of this prompt" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
-                  <input type="text" value={formData.tags || ''} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="e.g., hooks, engagement, conversion" />
-                </div>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={formData.isActive !== false} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="rounded" />
-                    <span className="text-sm text-gray-700">Active</span>
-                  </label>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Framework {formData.role === 'content_writer' && '*'}</label>
+                <select value={formData.frameworkType || ''} onChange={(e) => setFormData({ ...formData, frameworkType: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="">Select Framework</option>
+                  {frameworkOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
               </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>Cancel</Button>
-                <Button onClick={handleSave} loading={saving}>{editModal === 'new' ? 'Create' : 'Save'}</Button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select value={formData.category || 'general'} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="general">General</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="landing_page">Landing Page</option>
+                  <option value="email">Email</option>
+                  <option value="video">Video</option>
+                </select>
               </div>
-            </CardBody>
-          </Card>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                <select value={formData.platform || 'all'} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="all">All Platforms</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="google_ads">Google Ads</option>
+                  <option value="landing_page">Landing Page</option>
+                  <option value="email">Email</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prompt Content *</label>
+              <textarea value={formData.content || ''} onChange={(e) => setFormData({ ...formData, content: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm" rows={10} placeholder="Enter the prompt content..." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <input type="text" value={formData.description || ''} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Brief description of this prompt" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma-separated)</label>
+              <input type="text" value={formData.tags || ''} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="e.g., hooks, engagement, conversion" />
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={formData.isActive !== false} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="rounded" />
+                <span className="text-sm text-gray-700">Active</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => { setEditModal(null); setFormData({}); }}>Cancel</Button>
+            <Button onClick={handleSave} loading={saving}>{editModal === 'new' ? 'Create' : 'Save'}</Button>
+          </div>
         </div>
-      )}
+      </Modal>
 
       {/* View Modal */}
-      {viewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setViewModal(null)}>
-          <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <CardBody className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{viewModal.title}</h3>
-                <Button variant="ghost" size="sm" onClick={() => setViewModal(null)}><X size={18} /></Button>
-              </div>
-              <div className="space-y-3 mb-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-blue-100 text-blue-700">{roleOptions.find(r => r.value === viewModal.role)?.label || viewModal.role}</Badge>
-                  {viewModal.frameworkType && <Badge className="bg-amber-100 text-amber-700">{viewModal.frameworkType}</Badge>}
-                  {viewModal.category && <Badge className="bg-gray-100 text-gray-700">{viewModal.category}</Badge>}
-                  {viewModal.platform && viewModal.platform !== 'all' && <Badge className="bg-green-100 text-green-700">{viewModal.platform}</Badge>}
-                  <Badge className={viewModal.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>{viewModal.isActive ? 'Active' : 'Inactive'}</Badge>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono overflow-x-auto">{viewModal.content}</pre>
-              </div>
-              {viewModal.description && <p className="text-sm text-gray-600 mb-4">{viewModal.description}</p>}
-              {viewModal.tags && viewModal.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {viewModal.tags.map((tag, i) => <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">{tag}</span>)}
-                </div>
-              )}
-              <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setViewModal(null)}>Close</Button>
-                <Button onClick={() => { setViewModal(null); openEditModal(viewModal); }}><Edit size={16} className="mr-2" />Edit</Button>
-              </div>
-            </CardBody>
-          </Card>
+      <Modal isOpen={!!viewModal} onClose={() => setViewModal(null)} size="2xl" showCloseButton={false}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">{viewModal?.title}</h3>
+            <Button variant="ghost" size="sm" onClick={() => setViewModal(null)}><X size={18} /></Button>
+          </div>
+          <div className="space-y-3 mb-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge className="bg-blue-100 text-blue-700">{roleOptions.find(r => r.value === viewModal?.role)?.label || viewModal?.role}</Badge>
+              {viewModal?.frameworkType && <Badge className="bg-amber-100 text-amber-700">{viewModal.frameworkType}</Badge>}
+              {viewModal?.category && <Badge className="bg-gray-100 text-gray-700">{viewModal.category}</Badge>}
+              {viewModal?.platform && viewModal.platform !== 'all' && <Badge className="bg-green-100 text-green-700">{viewModal.platform}</Badge>}
+              <Badge className={viewModal?.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>{viewModal?.isActive ? 'Active' : 'Inactive'}</Badge>
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono overflow-x-auto">{viewModal?.content}</pre>
+          </div>
+          {viewModal?.description && <p className="text-sm text-gray-600 mb-4">{viewModal.description}</p>}
+          {viewModal?.tags && viewModal.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {viewModal.tags.map((tag, i) => <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">{tag}</span>)}
+            </div>
+          )}
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setViewModal(null)}>Close</Button>
+            <Button onClick={() => { setViewModal(null); openEditModal(viewModal); }}><Edit size={16} className="mr-2" />Edit</Button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

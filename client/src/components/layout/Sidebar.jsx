@@ -200,7 +200,7 @@ const isNavItemActive = (item) => {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen bg-dark-300 border-r border-dark-200 transition-all duration-300',
+        'fixed left-0 top-0 z-40 h-screen bg-dark-300 border-r border-dark-200 transition-[width] duration-300',
         'flex flex-col',
         collapsed ? 'w-20' : 'w-64'
       )}
