@@ -7,6 +7,7 @@ const Offer = require('../models/Offer');
 const TrafficStrategy = require('../models/TrafficStrategy');
 const CreativeStrategy = require('../models/Creative');
 const Membership = require('../models/Membership');
+const emailService = require('./emailService');
 
 // SOP References for different task types
 const SOP_REFERENCES = {
@@ -1279,9 +1280,13 @@ function calculateDueDate(taskType) {
 }
 
 /**
- * Send task assignment notifications
+ * Send task assignment notifications (in-app + email)
  */
 async function sendTaskAssignmentNotifications(tasks, project) {
+  console.log('=== sendTaskAssignmentNotifications called ===');
+  console.log('Tasks count:', tasks.length);
+  console.log('Project:', project.projectName || project.businessName);
+
   const tasksByUser = {};
 
   // Group tasks by assigned user
@@ -1294,11 +1299,14 @@ async function sendTaskAssignmentNotifications(tasks, project) {
     }
   }
 
-  // Send notifications
+  console.log('Users with assigned tasks:', Object.keys(tasksByUser).length);
+
+  // Send notifications and emails
   for (const [userId, userTasks] of Object.entries(tasksByUser)) {
     const taskCount = userTasks.length;
     const projectDisplay = project.projectName || project.businessName;
 
+    // Create in-app notification
     await Notification.create({
       recipient: userId,
       type: 'task_assigned',
@@ -1307,7 +1315,33 @@ async function sendTaskAssignmentNotifications(tasks, project) {
       projectId: project._id,
       organizationId: project.organizationId
     });
+
+    // Send email notification for each task
+    try {
+      const assignedUser = await User.findById(userId).select('name email');
+      if (assignedUser && assignedUser.email) {
+        console.log(`Sending task assignment email to ${assignedUser.email} for ${taskCount} task(s)`);
+
+        // Send email for each task
+        for (const task of userTasks) {
+          // Get user who completed the creative strategy (for "assignedBy")
+          const completedByUser = task.assignedBy ? await User.findById(task.assignedBy).select('name email') : null;
+
+          await emailService.sendTaskAssignmentNotification(
+            task,
+            project,
+            assignedUser,
+            completedByUser || { name: 'System' }
+          ).catch(err => console.error(`Failed to send task email to ${assignedUser.email}:`, err.message));
+        }
+      }
+    } catch (emailError) {
+      console.error('Error sending task assignment email:', emailError.message);
+      // Don't throw - email failures should not block the operation
+    }
   }
+
+  console.log('=== sendTaskAssignmentNotifications completed ===');
 }
 
 /**

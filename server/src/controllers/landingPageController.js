@@ -1,8 +1,10 @@
 const LandingPage = require('../models/LandingPage');
 const Project = require('../models/Project');
 const Task = require('../models/Task');
+const User = require('../models/User');
 const { completeStage, getStageStatus } = require('../middleware/stageGating');
 const { hasProjectAccess } = require('../utils/auth');
+const emailService = require('../services/emailService');
 
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findOne({
@@ -530,6 +532,26 @@ const generateLandingPageTasks = async (project, landingPage, userId) => {
     );
 
   await Promise.all(notificationPromises);
+
+  // Send email notifications to assigned users
+  for (const task of createdTasks) {
+    if (task.assignedTo) {
+      try {
+        const assignedUser = await User.findById(task.assignedTo).select('name email');
+        if (assignedUser && assignedUser.email) {
+          console.log(`Sending landing page task email to ${assignedUser.email} for task: ${task.taskTitle}`);
+          await emailService.sendTaskAssignmentNotification(
+            task,
+            project,
+            assignedUser,
+            { name: 'System' }
+          ).catch(err => console.error(`Failed to send landing page task email to ${assignedUser.email}:`, err.message));
+        }
+      } catch (emailError) {
+        console.error('Error sending landing page task email:', emailError.message);
+      }
+    }
+  }
 
   return createdTasks;
 };

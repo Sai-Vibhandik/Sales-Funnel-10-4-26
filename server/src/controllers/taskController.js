@@ -7,6 +7,11 @@ const CreativeStrategy = require('../models/Creative');
 const { generateTasksFromStrategy } = require('../services/taskGenerationService');
 const emailService = require('../services/emailService');
 
+// Debug: Confirm emailService loaded
+console.log('📋 Task Controller loaded');
+console.log('  - emailService type:', typeof emailService);
+console.log('  - sendTaskAssignmentNotification:', typeof emailService.sendTaskAssignmentNotification);
+
 // Import centralized status constants
 const {
   PENDING_STATUSES,
@@ -251,7 +256,9 @@ exports.createTask = async (req, res, next) => {
     });
 
     // Notify assigned user if any
+    console.log('=== createTask: Checking if assignedTo exists:', !!assignedTo);
     if (assignedTo) {
+      console.log('Creating notification for assigned user:', assignedTo);
       const projectDisplay = project.projectName || project.businessName;
       await Notification.create({
         recipient: assignedTo,
@@ -261,13 +268,22 @@ exports.createTask = async (req, res, next) => {
         projectId,
         organizationId: req.organizationId
       });
+      console.log('Notification created');
 
       // Send email notification (async, don't block)
+      console.log('Finding assigned user...');
       const assignedUser = await User.findById(assignedTo).select('name email');
+      console.log('Assigned user found:', assignedUser?.name, assignedUser?.email);
+
       if (assignedUser) {
+        console.log('Calling emailService.sendTaskAssignmentNotification...');
         emailService.sendTaskAssignmentNotification(task, project, assignedUser, req.user)
           .catch(err => console.error('Failed to send task assignment email:', err));
+      } else {
+        console.log('No assigned user found, skipping email');
       }
+    } else {
+      console.log('No assignedTo provided, skipping notification and email');
     }
 
     res.status(201).json({
@@ -1500,6 +1516,10 @@ exports.marketerReview = async (req, res, next) => {
 // @route   PUT /api/tasks/:taskId/assign
 // @access  Private (Admin or Performance Marketer)
 exports.assignTask = async (req, res, next) => {
+  console.log('=== assignTask called ===');
+  console.log('taskId:', req.params.taskId);
+  console.log('assignedTo:', req.body.assignedTo);
+
   try {
     const { taskId } = req.params;
     const { assignedTo, assignedRole } = req.body;
@@ -1521,6 +1541,9 @@ exports.assignTask = async (req, res, next) => {
       });
     }
 
+    console.log('Task found:', task.taskTitle);
+    console.log('Project:', task.projectId?.projectName || task.projectId?.businessName);
+
     const oldAssignee = task.assignedTo;
     task.assignedTo = assignedTo || null;
     if (assignedRole) task.assignedRole = assignedRole;
@@ -1536,7 +1559,9 @@ exports.assignTask = async (req, res, next) => {
     await task.save();
 
     // Notify new assignee
+    console.log('Checking if assignedTo exists:', !!assignedTo);
     if (assignedTo) {
+      console.log('Creating notification for user:', assignedTo);
       const projectDisplay = task.projectId.projectName || task.projectId.businessName;
       await Notification.create({
         recipient: assignedTo,
@@ -1546,16 +1571,23 @@ exports.assignTask = async (req, res, next) => {
         projectId: task.projectId._id,
         organizationId: req.organizationId
       });
+      console.log('Notification created');
 
       // Send email notification (async, don't block)
+      console.log('Finding assigned user...');
       const assignedUser = await User.findById(assignedTo).select('name email');
+      console.log('Assigned user found:', assignedUser?.name, assignedUser?.email);
+
       if (assignedUser) {
+        console.log('Calling emailService.sendTaskAssignmentNotification...');
         emailService.sendTaskAssignmentNotification(
           task,
           task.projectId,
           assignedUser,
           req.user
         ).catch(err => console.error('Failed to send task assignment email:', err));
+      } else {
+        console.log('No assigned user found, skipping email');
       }
     }
 
@@ -1564,6 +1596,7 @@ exports.assignTask = async (req, res, next) => {
       data: task
     });
   } catch (error) {
+    console.error('assignTask error:', error);
     next(error);
   }
 };

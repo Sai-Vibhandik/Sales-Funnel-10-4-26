@@ -7,6 +7,11 @@ const {
   teamMemberCreatedTemplate
 } = require('../utils/emailTemplates');
 
+// Debug: Confirm templates loaded
+console.log('📧 Email Service loaded');
+console.log('  - taskAssignmentTemplate:', typeof taskAssignmentTemplate);
+console.log('  - projectAssignmentTemplate:', typeof projectAssignmentTemplate);
+
 /**
  * Email Service
  * Centralized service for sending transactional emails
@@ -18,8 +23,8 @@ const {
  * @param {Object} owner - The organization owner (user)
  * @param {Object} plan - The selected plan
  */
-const sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 = async (organization, owner, plan) => {
-  console.log('=== sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 called ===');
+const sendOrgRegistrationNotification = async (organization, owner, plan) => {
+  console.log('=== sendOrgRegistrationNotification called ===');
   console.log('Organization:', organization?.name);
   console.log('Owner:', owner?.name, owner?.email);
 
@@ -66,7 +71,7 @@ const sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 = async (organization, owner, plan
       }
     }
 
-    console.log('=== sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8 completed ===');
+    console.log('=== sendOrgRegistrationNotification completed ===');
   } catch (error) {
     console.error('Error sending org registration notification:', error);
     console.error('Error stack:', error.stack);
@@ -114,8 +119,17 @@ const sendTeamInvitation = async (invitation, organization, inviter) => {
  * @param {Object} rejectionContext - Optional context for rejection emails
  */
 const sendTaskAssignmentNotification = async (task, project, assignedUser, assignedBy, rejectionContext = null) => {
+  console.log('=== sendTaskAssignmentNotification called ===');
+  console.log('Task:', task?.taskTitle, task?._id);
+  console.log('Project:', project?.projectName || project?.businessName, project?._id);
+  console.log('Assigned User:', assignedUser?.name, assignedUser?.email);
+  console.log('Assigned By:', assignedBy?.name);
+  console.log('Is Rejection:', rejectionContext?.isRejection);
+
   try {
     const { subject, html } = taskAssignmentTemplate(task, project, assignedUser, assignedBy, rejectionContext);
+
+    console.log('Template generated, sending email to:', assignedUser.email);
 
     await sendEmail({
       email: assignedUser.email,
@@ -126,6 +140,7 @@ const sendTaskAssignmentNotification = async (task, project, assignedUser, assig
     console.log(`Task assignment notification sent to ${assignedUser.email}`);
   } catch (error) {
     console.error('Error sending task assignment notification:', error);
+    console.error('Error stack:', error.stack);
     // Don't throw - email failures should not block the main operation
   }
 };
@@ -185,7 +200,7 @@ const sendTeamMemberCreatedNotification = async (user, organization, createdBy, 
 };
 
 module.exports = {
-  sendOr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8,
+  sendOrgRegistrationNotification,
   sendTeamInvitation,
   sendTaskAssignmentNotification,
   sendProjectAssignmentNotification,

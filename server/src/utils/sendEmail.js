@@ -17,6 +17,11 @@ const createTransporter = () => {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT) || 587,
     secure: process.env.SMTP_SECURE === 'true',
+    requireTLS: true, // Required for Gmail SMTP on port 587
+    tls: {
+      ciphers: 'SSLv3',
+      rejectUnauthorized: false
+    },
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD

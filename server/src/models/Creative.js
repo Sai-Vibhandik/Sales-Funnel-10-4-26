@@ -214,12 +214,13 @@ const creativePlanItemSchema = new mongoose.Schema({
   // Sub-type based on creative type (e.g., Problem Image, Storytelling, etc.)
   subType: {
     type: String,
-    required: true
+    required: false
   },
   // Campaign objective (awareness, nurturing, traffic, etc.)
   objective: {
     type: String,
-    enum: CAMPAIGN_OBJECTIVES
+    enum: [...CAMPAIGN_OBJECTIVES, ''],
+    default: ''
   },
   // Platforms (multi-select)
   platforms: [{
@@ -233,7 +234,8 @@ const creativePlanItemSchema = new mongoose.Schema({
   // Assigned role for this creative (graphic_designer or video_editor)
   assignedRole: {
     type: String,
-    enum: CREATIVE_ROLES
+    enum: [...CREATIVE_ROLES, ''],
+    default: ''
   },
   // Assigned team members (user IDs) - auto-populated from project team based on role
   assignedTeamMembers: [{
@@ -255,7 +257,8 @@ const creativePlanItemSchema = new mongoose.Schema({
     type: String,
     enum: ['PAS', 'AIDA', 'BAB', '4C', 'STORY', 'DIRECT_RESPONSE',
            'HOOKS', 'OBJECTION', 'PASTOR', 'QUEST', 'ACCA',
-           'FAB', '5A', 'SLAP', 'HOOK_STORY_OFFER', '4P', 'MASTER']
+           'FAB', '5A', 'SLAP', 'HOOK_STORY_OFFER', '4P', 'MASTER', ''],
+    default: ''
   },
   // AI Subcategory (if applicable to the framework)
   aiSubCategory: {

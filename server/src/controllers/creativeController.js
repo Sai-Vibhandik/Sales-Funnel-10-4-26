@@ -1,9 +1,11 @@
 const CreativeStrategy = require('../models/Creative');
 const Project = require('../models/Project');
 const Task = require('../models/Task');
+const User = require('../models/User');
 const { completeStage, getStageStatus } = require('../middleware/stageGating');
 const { hasProjectAccess } = require('../utils/auth');
 const { generateTasksFromStrategy, updateCreativePlanTaskAssignments } = require('../services/taskGenerationService');
+const emailService = require('../services/emailService');
 
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findOne({
@@ -407,7 +409,7 @@ exports.addCreative = async (req, res, next) => {
 
     // Auto-create content writing task if Content Planner assigned
     if (assignedContentWriter) {
-      await Task.create({
+      const contentTask = await Task.create({
         projectId,
         organizationId: req.user.currentOrganization,
         creativeStrategyId: creativeStrategy._id,
@@ -421,6 +423,21 @@ exports.addCreative = async (req, res, next) => {
         description: notes || `Write content for ${creativeType} creative on ${platform}`,
         createdBy: req.user._id
       });
+
+      // Send email notification to assigned content writer
+      try {
+        const assignedUser = await User.findById(assignedContentWriter).select('name email');
+        if (assignedUser && assignedUser.email) {
+          await emailService.sendTaskAssignmentNotification(
+            contentTask,
+            project,
+            assignedUser,
+            req.user
+          ).catch(err => console.error(`Failed to send content task email to ${assignedUser.email}:`, err.message));
+        }
+      } catch (emailError) {
+        console.error('Error sending content task email:', emailError.message);
+      }
     }
 
     // Return populated creative strategy

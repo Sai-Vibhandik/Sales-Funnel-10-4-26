@@ -204,6 +204,27 @@ const generateLandingPageTasksIfAssigned = async (project, landingPage, userId) 
 
     await Promise.all(notificationPromises);
 
+    // Send email notifications to assigned users
+    for (const task of createdTasks) {
+      if (task.assignedTo) {
+        try {
+          const assignedUser = await User.findById(task.assignedTo).select('name email');
+          if (assignedUser && assignedUser.email) {
+            console.log(`Sending landing page task email to ${assignedUser.email} for task: ${task.taskTitle}`);
+            await emailService.sendTaskAssignmentNotification(
+              task,
+              project,
+              assignedUser,
+              { name: 'System' } // System-generated task
+            ).catch(err => console.error(`Failed to send landing page task email to ${assignedUser.email}:`, err.message));
+          }
+        } catch (emailError) {
+          console.error('Error sending landing page task email:', emailError.message);
+          // Don't throw - email failures should not block the operation
+        }
+      }
+    }
+
     return createdTasks;
   } catch (error) {
     console.error('Error generating landing page tasks:', error);
@@ -1240,16 +1261,30 @@ exports.completeLandingPageStage = async (req, res, next) => {
 
         tasksCreated.push(designTask);
 
+        // Send in-app notification
         await createNotification({
           recipient: designerIdToAssign,
           type: 'task_assigned',
           title: 'New Landing Page Design Task',
           message: `You have been assigned a design task: "${landingPage.name || 'Landing Page'}" for project "${project.projectName || project.businessName}"`,
           projectId: project._id,
-          organizationId: project.organizationId,
-          sendEmail: true,
-          emailData: { project, role: 'ui_ux_designer', assignedBy: req.user }
+          organizationId: project.organizationId
         });
+
+        // Send email notification
+        try {
+          const assignedUser = await User.findById(designerIdToAssign).select('name email');
+          if (assignedUser && assignedUser.email) {
+            await emailService.sendTaskAssignmentNotification(
+              designTask,
+              project,
+              assignedUser,
+              req.user
+            ).catch(err => console.error(`Failed to send design task email to ${assignedUser.email}:`, err.message));
+          }
+        } catch (emailError) {
+          console.error('Error sending design task email:', emailError.message);
+        }
 
         console.log(`Design task created and notification sent to designer: ${designerIdToAssign}`);
       } else {

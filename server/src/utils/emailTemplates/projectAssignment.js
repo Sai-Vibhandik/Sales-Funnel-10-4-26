@@ -6,7 +6,7 @@ const baseTemplate = require('./baseTemplate');
  */
 
 const projectAssignmentTemplate = (project, assignedUser, role, assignedBy) => {
-  const projectUrl = `${process.env.FRONTEND_URL || 'https://growthvalley.com'}/projects/${project._id}`;
+  const projectUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard/projects/${project._id}`;
 
   // Format role for display
   const formatRole = (roleKey) => {
@@ -60,7 +60,7 @@ const projectAssignmentTemplate = (project, assignedUser, role, assignedBy) => {
     </p>
 
     <p style="margin-top: 20px; font-size: 14px; color: #64748b;">
-      You can view all your projects in your <a href="${process.env.FRONTEND_URL || 'https://growthvalley.com'}/projects" style="color: #4F46E5;">Project Dashboard</a>.
+      You can view all your projects in your <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard/projects" style="color: #4F46E5;">Project Dashboard</a>.
     </p>
   `;
 
