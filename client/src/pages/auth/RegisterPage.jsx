@@ -37,7 +37,7 @@ export default function RegisterPage() {
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/plans/public`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/plans/public`);
         const data = await response.json();
         if (data.success && data.data) {
           const activePlans = data.data.filter(p => p.isActive && p.isPublic);

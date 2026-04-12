@@ -334,7 +334,7 @@ import { Button, Input, Card, CardBody, Spinner } from '@/components/ui';
 import { CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
 
 const organizationSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters').max(100, 'Too long'),
@@ -424,7 +424,7 @@ export default function OnboardingPage() {
       (async () => {
         try {
           const res = await fetch(
-            `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/plans/public/${planIdFromUrl}`
+            `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/plans/public/${planIdFromUrl}`
           );
           const data = await res.json();
           if (data.success && data.data) {
